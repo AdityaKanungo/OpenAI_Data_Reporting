@@ -10,17 +10,18 @@ CREATE TABLE sample_table (
 """
 
 
-# Find all CREATE TABLE segments
-create_statements = re.findall(r"CREATE TABLE \[?(\w+)\]? \((.*?)\) ON \[?\w+\]?", sql_script, re.DOTALL)
+# Split the script into segments using 'GO' as delimiter
+segments = [seg.strip() for seg in sql_script.split("GO") if "CREATE TABLE" in seg]
 
-# Initialize an empty list to store table metadata for all tables
 all_tables_metadata = []
 
-for create_stmt in create_statements:
-    table_name = create_stmt[0]
-    columns_section = create_stmt[1]
-    
-    columns = re.findall(r"\[?(\w+)\]?\s+(\w+\s*\(?[\w\s,]*\)?\s*\w*)[,)]", columns_section)
+for segment in segments:
+    # Extract table name
+    table_match = re.search(r"CREATE TABLE \[?(\w+)\]?", segment)
+    table_name = table_match.group(1) if table_match else None
+
+    # Extract columns
+    columns = re.findall(r"\[?(\w+)\]?\s+(\w+\s*\(?[\w\s,]*\)?\s*\w*)[,)]", segment)
     
     # Construct the dictionary for each table
     table_metadata = {
