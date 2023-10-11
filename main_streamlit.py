@@ -49,9 +49,14 @@ st.markdown(
 openai.api_key = ''
 
 def format_metadata_for_prompt(metadata):
-    tables = list(metadata.keys())
-    columns = {table: [col['name'] for col in metadata[table]['columns']] for table in tables}
+    if isinstance(metadata, list):
+        tables = [item['name'] for item in metadata]
+        columns = {table['name']: [col['name'] for col in table['columns']] for table in metadata}
+    else:
+        tables = list(metadata.keys())
+        columns = {table: [col['name'] for col in metadata[table]['columns']] for table in tables}
     return {"tables": tables, "columns": columns}
+
 
 def is_select_statement(query):
     parsed = sqlparse.parse(query)
