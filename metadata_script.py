@@ -11,7 +11,7 @@ CREATE TABLE sample_table (
 
 
 # Find all CREATE TABLE segments
-create_statements = re.findall(r"CREATE TABLE \[?(\w+)\]? \{(.*?)\} ON \[?\w+\]?", sql_script, re.DOTALL)
+create_statements = re.findall(r"CREATE TABLE \[?(\w+)\]? \((.*?)\) ON \[?\w+\]?", sql_script, re.DOTALL)
 
 # Initialize an empty list to store table metadata for all tables
 all_tables_metadata = []
