@@ -1,19 +1,11 @@
 import re
 import json
 
-sql_script = """
-CREATE TABLE sample_table (
-    id INT PRIMARY KEY,
-    name VARCHAR(100),
-    birthdate DATE
-);
-"""
+sql_script = """ ... """  # Use your SQL script here
 
-
-# Split the script into segments using 'GO' as delimiter
 segments = [seg.strip() for seg in sql_script.split("GO") if "CREATE TABLE" in seg]
 
-all_tables_metadata = []
+metadata_dict = {}
 
 for segment in segments:
     # Extract table name
@@ -21,23 +13,26 @@ for segment in segments:
     table_name = table_match.group(1) if table_match else None
 
     # Extract columns
-    columns = re.findall(r"\[?(\w+)\]?\s+(\w+\s*\(?[\w\s,]*\)?\s*\w*)[,)]", segment)
+    columns = re.findall(r"\[?(\w+)\]?\s+(\w+\s*\(?[\w\s,]*\)?\s*\w*)( NOT NULL)?( PRIMARY KEY)?[,)]", segment)
     
-    # Construct the dictionary for each table
-    table_metadata = {
-        "table_name": table_name,
-        "columns": []
-    }
-
-    for col_name, col_type in columns:
-        col_type = col_type.strip()  # Clean up the column type string
-        table_metadata["columns"].append({
-            "column_name": col_name,
-            "column_type": col_type
+    columns_list = []
+    for idx, (col_name, col_type, not_null, primary_key) in enumerate(columns):
+        columns_list.append({
+            "id": idx,
+            "name": col_name,
+            "type": col_type.strip(),
+            "not_null": True if not_null else False,
+            "default_value": None,  # This can be enhanced further to extract actual default values
+            "primary_key": True if primary_key else False
         })
 
-    all_tables_metadata.append(table_metadata)
+    # As of now, we're not extracting foreign_keys and indices. Placeholders are kept for future extensions
+    metadata_dict[table_name] = {
+        "columns": columns_list,
+        "indices": [],
+        "foreign_keys": []
+    }
 
-# Serialize the list of dictionaries to JSON and save to a file
+# Serialize the dictionary to JSON and save to a file
 with open('output.json', 'w') as json_file:
-    json.dump(all_tables_metadata, json_file, indent=4)
+    json.dump(metadata_dict, json_file, indent=4)
