@@ -242,10 +242,38 @@ with right_column:
                 st.session_state.query_executed = False  # Ensure flag is set to False in case of error
 
 # Now, outside the column contexts, check for the flag and display the results.
+# Assuming 'df' is the result of your SQL query
 if 'query_executed' in st.session_state and st.session_state.query_executed:
-    st.write('')
-    st.write('')
     st.subheader('Results')
     st.write(st.session_state.query_result)
+    
+    # Check if there are any columns in the dataframe
+    if not st.session_state.query_result.empty:
+        # Ask the user for the type of plot they want to see
+        plot_type = st.selectbox(
+            "Select a plot type:",
+            ["Bar plot", "Line plot", "Scatter plot", "Pie chart"]
+        )
+
+        # Based on the plot type, ask the user for the relevant columns
+        if plot_type == "Bar plot":
+            x_axis = st.selectbox("Choose a column for X-axis:", st.session_state.query_result.columns)
+            y_axis = st.selectbox("Choose a column for Y-axis:", st.session_state.query_result.columns)
+            st.bar_chart(st.session_state.query_result[[x_axis, y_axis]].set_index(x_axis))
+        
+        elif plot_type == "Line plot":
+            x_axis = st.selectbox("Choose a column for X-axis:", st.session_state.query_result.columns)
+            y_axis = st.selectbox("Choose a column for Y-axis:", st.session_state.query_result.columns)
+            st.line_chart(st.session_state.query_result[[x_axis, y_axis]].set_index(x_axis))
+        
+        elif plot_type == "Scatter plot":
+            x_axis = st.selectbox("Choose a column for X-axis:", st.session_state.query_result.columns)
+            y_axis = st.selectbox("Choose a column for Y-axis:", st.session_state.query_result.columns)
+            st.area_chart(st.session_state.query_result[[x_axis, y_axis]])
+        
+        elif plot_type == "Pie chart":
+            pie_col = st.selectbox("Choose a column to visualize:", st.session_state.query_result.columns)
+            st.session_state.query_result[pie_col].value_counts().plot.pie(autopct="%.1f%%")
+            st.pyplot()
 
 
