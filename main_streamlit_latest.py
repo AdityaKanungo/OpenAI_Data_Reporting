@@ -3,6 +3,7 @@ from PIL import Image
 import openai
 import json
 import base64
+import io
 import sqlite3
 import pandas as pd
 import sqlparse
@@ -15,25 +16,16 @@ st.set_page_config(page_title="SQL Query Generator", layout="wide")
 
 def get_image_as_data_url(file_path):
     with open(file_path, "rb") as image_file:
-        # Convert binary image to base64 string
         encoded_image = base64.b64encode(image_file.read()).decode()
-
-    # Return image as a data URL
     return f"data:image/png;base64,{encoded_image}"
 
 def get_custom_html(data_url):
     with open("custom_styles.html", "r") as file:
         return file.read().replace("{data_url}", data_url)
 
-# Get the image as a data URL
 data_url = get_image_as_data_url("C:/Users/aksha/Desktop/Test db/header3.png")
-
-# Inject custom CSS and HTML from file
 custom_html = get_custom_html(data_url)
 st.markdown(custom_html, unsafe_allow_html=True)
-
-
-# Create a container with the class "navbar"
 st.markdown(
     """
     <div class='navbar'>
@@ -45,8 +37,9 @@ st.markdown(
 
 ### End Header - nav -----------------------
 
-# Initialize the OpenAI API (for security reasons, it's better to set this as an environment variable)
-openai.api_key = ''
+# Initialize the OpenAI API
+openai.api_key = 
+
 
 def format_metadata_for_prompt(metadata):
     if isinstance(metadata, list):
@@ -63,6 +56,17 @@ def connect_to_db(host, port, user, password, dbname):
     # This is for SQLite; for other databases, modify the connection string
     conn_str = f"sqlite:///{dbname}"
     return sqlite3.connect(conn_str)
+
+
+def get_table_download_link(df, filename="results.xlsx", text="Download results"):
+    """Generates a link allowing the data in a given panda dataframe to be downloaded"""
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, sheet_name='Sheet1')
+    binary_data = output.getvalue()
+    b64 = base64.b64encode(binary_data).decode()
+    return f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}">{text}</a>'
+
 
 
 def is_select_statement(query):
@@ -136,144 +140,181 @@ IMPORTANT: If a request involves attributes, columns or relationships NOT presen
     # Extract the model's message from the response
     return response.choices[0].message['content'].strip()
 
-# Streamlit UI Configuration
-#st.set_page_config(page_title="SQL Query Generator", layout="wide")
+def review_sql_query(generated_sql, formatted_metadata):
+    # Set up the conversation with the model for reviewing the SQL
+    messages = [
+        {"role": "system", "content": f"""
+The following SQL query has been generated:
 
-# Add logo to the left column (You can adjust the width as needed)
+{generated_sql}
+
+Please review the query based on the provided metadata:
+
+Tables: {formatted_metadata['tables']}
+Columns: {formatted_metadata['columns']}
+
+Ensure that the query:
+1. Uses only the tables and columns mentioned in the metadata.
+2. Is optimized and adheres to SQL standards.
+3. Does not introduce or assume any tables or columns not explicitly mentioned in the metadata.
+
+Provide an improved version of the query if necessary.
+"""}
+    ]
+    
+    # Use OpenAI to review the generated SQL using the chat endpoint
+    response = openai.ChatCompletion.create(
+      model="gpt-3.5-turbo",
+      messages=messages
+    )
+    
+    # Extract the model's message from the response
+    content = response.choices[0].message['content'].strip()
+    
+    # Check if the content starts with a common SQL statement keyword
+    if content.lower().startswith(("select", "update", "insert", "delete")):
+        return content
+    else:
+        # If not, assume the original SQL is correct
+        return generated_sql
+
+#-----------------------------------------------------------------------
+
+def query_result_data_with_openai(prompt, result_data):
+    # Set up the conversation with the model
+    messages = [
+        {"role": "system", "content": "You are provided with the following data. Answer questions based on this. If a visualization is requested, provide only pure Python code for plotting. Otherwise, provide a textual answer."},
+        {"role": "user", "content": result_data.to_string()},
+        {"role": "user", "content": prompt}
+    ]
+
+    # Use OpenAI to generate a response
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=messages
+    )
+
+    # Extract the model's message from the response
+    full_response = response.choices[0].message['content'].strip()
+    
+    # Split the response into answer and code
+    if "```python" in full_response and "```" in full_response:
+        # Split the response at the Python code block
+        parts = full_response.split("```python")
+        answer = parts[0].strip()
+        python_code = parts[1].rsplit("```", 1)[0].strip()
+        
+        # Properly indent the Python code (assuming 4 spaces for indentation)
+        python_code = '\n'.join(['    ' + line if line else line for line in python_code.split('\n')])
+    else:
+        answer = full_response
+        python_code = None
+
+    return answer, python_code
+
+#-----------------------------------------------------------------------
+
+# UI Components
 image = Image.open('Capture.png')
 st.image(image, width=200)
-
 st.title("SQL Query Generator using OpenAI")
+left_column, spacing_column, right_column = st.columns([0.40, 0.015, 0.20])
 
-# Create columns with custom widths and a spacing column in between
-left_column, spacing_column, right_column = st.columns([0.40, 0.015, 0.20])  # Adjust the values for desired width ratio
-
-# Left Column: File uploader and DB details
 with left_column:
     uploaded_file = left_column.file_uploader("Upload DB Metadata JSON file", type="json")
-    
     if uploaded_file:
         metadata = json.load(uploaded_file)
         formatted_metadata = format_metadata_for_prompt(metadata)
-        
-        # Display table details
         left_column.subheader("Database Tables and Columns:")
-
-        # Format the details
         details = []
         for table, columns in formatted_metadata['columns'].items():
-            # Color the table names with a shade of blue and columns with a shade of green
             line = f"<div style='margin-top: 0; padding: 0;'><strong style='color: #007ACC;'>{table}</strong>: <span style='color: #FFFFFF;'>{', '.join(columns)}</span></div>"
             details.append(line)
-
-        # Join the details and display in the markdown with controlled spacing, background color, and left padding
         left_column.markdown(f"""
         <div style='white-space: pre-wrap; overflow-wrap: break-word; font-family: "Courier New", monospace; background-color: #253547; padding: 10px; border-radius: 5px; margin: 0; padding: 0;'>
         <div style='margin-top: 0; padding-left: 1em;'>{''.join(details)}</div>
         </div>
         """, unsafe_allow_html=True)
 
-
 with right_column:
-    # Get the prompt from the user
     prompt = right_column.text_area("Enter your prompt:")
-
-    # Initialize session state variables if they do not exist
     if 'sql_query' not in st.session_state:
         st.session_state.sql_query = ""
     if 'show_execute_button' not in st.session_state:
         st.session_state.show_execute_button = False
-
-    # Generate SQL button
     if right_column.button("Generate"):
         if prompt:
             with st.spinner("Generating response..."):
                 st.session_state.sql_query = generate_sql_query(prompt, formatted_metadata)
-            st.write('')
-            #right_column.code(st.session_state.sql_query, language="sql")
-            
-            if is_select_statement(st.session_state.sql_query):
-                st.session_state.show_execute_button = False
-
-
-    # ... [Rest of the code]
-    # Display DB Connection details and Connect Database button after SQL is generated
+                st.session_state.sql_query = review_sql_query(st.session_state.sql_query, formatted_metadata)
     if st.session_state.sql_query:
         right_column.code(st.session_state.sql_query, language="sql")
-
         if is_select_statement(st.session_state.sql_query):
             st.write("DB Connection Details:")
-
-            # First row
             col1, col2 = st.columns(2)
             db_host = col1.text_input("Host", key="db_host")
             db_port = col2.text_input("Port", key="db_port")
-
-            # Second row
             col1, col2 = st.columns(2)
             db_user = col1.text_input("Username", key="db_user")
             db_pass = col2.text_input("Password", type="password", key="db_pass")
-
-            # Third row
             col1, col2 = st.columns(2)
             db_name = col1.text_input("Database Name", key="db_name")
-
             if st.button("Connect Database"):
                 try:
                     conn_str = f"mssql+pyodbc://{db_user}:{db_pass}@{db_host}\\SQLEXPRESS:{db_port}/{db_name}?driver=ODBC+Driver+17+for+SQL+Server"
                     engine = create_engine(conn_str)
-                    st.session_state.connection = engine.connect()  # Store the connection in session_state
+                    st.session_state.connection = engine.connect()
                     st.success("Connected successfully!")
                     st.session_state.show_execute_button = True
                 except Exception as e:
                     st.error(f"Error establishing connection: {str(e)}")
         else:
             st.warning("Only SELECT statements can be executed.")
-
-    # Execute Query button
     if st.session_state.show_execute_button:
         if st.button("Execute Query"):
             try:
-                df = pd.read_sql_query(st.session_state.sql_query, st.session_state.connection)  # Use the connection from session_state
-                st.session_state.query_executed = True  # Set the flag
-                st.session_state.query_result = df  # Store the result in session_state
+                df = pd.read_sql_query(st.session_state.sql_query, st.session_state.connection)
+                st.session_state.query_executed = True
+                st.session_state.query_result = df
             except Exception as e:
                 st.error(f"Error executing query: {str(e)}")
-                st.session_state.query_executed = False  # Ensure flag is set to False in case of error
+                st.session_state.query_executed = False
 
-# Now, outside the column contexts, check for the flag and display the results.
-# Assuming 'df' is the result of your SQL query
 if 'query_executed' in st.session_state and st.session_state.query_executed:
     st.subheader('Results')
-    st.write(st.session_state.query_result)
-    
-    # Check if there are any columns in the dataframe
-    if not st.session_state.query_result.empty:
-        # Ask the user for the type of plot they want to see
-        plot_type = st.selectbox(
-            "Select a plot type:",
-            ["Bar plot", "Line plot", "Scatter plot", "Pie chart"]
-        )
+    col1, col2 = st.columns([1, 10])
+    with col1:
+        num_rows = st.selectbox('Select rows:', options=[10, 50, 100, 200, 500, 1000], index=0)
+    st.write(st.session_state.query_result.head(num_rows))
+    st.markdown(get_table_download_link(st.session_state.query_result), unsafe_allow_html=True)
+    st.subheader("Query the Result Data")
 
-        # Based on the plot type, ask the user for the relevant columns
-        if plot_type == "Bar plot":
-            x_axis = st.selectbox("Choose a column for X-axis:", st.session_state.query_result.columns)
-            y_axis = st.selectbox("Choose a column for Y-axis:", st.session_state.query_result.columns)
-            st.bar_chart(st.session_state.query_result[[x_axis, y_axis]].set_index(x_axis))
-        
-        elif plot_type == "Line plot":
-            x_axis = st.selectbox("Choose a column for X-axis:", st.session_state.query_result.columns)
-            y_axis = st.selectbox("Choose a column for Y-axis:", st.session_state.query_result.columns)
-            st.line_chart(st.session_state.query_result[[x_axis, y_axis]].set_index(x_axis))
-        
-        elif plot_type == "Scatter plot":
-            x_axis = st.selectbox("Choose a column for X-axis:", st.session_state.query_result.columns)
-            y_axis = st.selectbox("Choose a column for Y-axis:", st.session_state.query_result.columns)
-            st.area_chart(st.session_state.query_result[[x_axis, y_axis]])
-        
-        elif plot_type == "Pie chart":
-            pie_col = st.selectbox("Choose a column to visualize:", st.session_state.query_result.columns)
-            st.session_state.query_result[pie_col].value_counts().plot.pie(autopct="%.1f%%")
-            st.pyplot()
+    # Check if the 'query_data_clicked' key is in session state. If not, set it to False.
+    if 'query_data_clicked' not in st.session_state:
+        st.session_state.query_data_clicked = False
 
+    result_query_prompt = st.text_area("Enter your query for the result data:")
+
+    # Check for button click and toggle the state.
+    if st.button("Query Data"):
+        st.session_state.query_data_clicked = not st.session_state.query_data_clicked
+
+    # Check the state to decide whether to execute the code or not.
+    if st.session_state.query_data_clicked and result_query_prompt:
+        with st.spinner("Querying data..."):
+            answer, python_code = query_result_data_with_openai(result_query_prompt, st.session_state.query_result)
+            
+            # Display the textual answer
+            if answer:
+                st.write(answer)
+            
+            if python_code:
+                # Strip leading and trailing whitespace
+                python_code = python_code.replace("plt.show()", "st.pyplot(plt)")
+                python_code = '\n'.join([line.strip() for line in python_code.split('\n') if line.strip()])
+                df = st.session_state.query_result
+                try:
+                    exec(python_code)
+                except Exception as e:
+                    st.error(f"Error executing the code: {str(e)}")
 
