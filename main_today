@@ -1,0 +1,340 @@
+import streamlit as st
+from PIL import Image
+import openai
+import json
+import base64
+import io
+import sqlite3
+import pandas as pd
+import sqlparse
+from sqlalchemy import create_engine
+
+# Streamlit UI Configuration
+st.set_page_config(page_title="SQL Query Generator", layout="wide")
+
+## Header - Nav --------------------------
+
+def get_image_as_data_url(file_path):
+    with open(file_path, "rb") as image_file:
+        encoded_image = base64.b64encode(image_file.read()).decode()
+    return f"data:image/png;base64,{encoded_image}"
+
+def get_custom_html(data_url):
+    with open("custom_styles.html", "r") as file:
+        return file.read().replace("{data_url}", data_url)
+
+data_url = get_image_as_data_url("C:/Users/aksha/Desktop/Test db/header3.png")
+custom_html = get_custom_html(data_url)
+st.markdown(custom_html, unsafe_allow_html=True)
+st.markdown(
+    """
+    <div class='navbar'>
+        <p></p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+### End Header - nav -----------------------
+
+# Initialize the OpenAI API
+openai.api_key = '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'
+
+
+def format_metadata_for_prompt(metadata):
+    if isinstance(metadata, list):
+        tables = [item['name'] for item in metadata]
+        columns = {table['name']: [col['name'] for col in table['columns']] for table in metadata}
+    else:
+        tables = list(metadata.keys())
+        columns = {table: [col['name'] for col in metadata[table]['columns']] for table in tables}
+    return {"tables": tables, "columns": columns}
+
+
+# Add a function to connect to the database
+def connect_to_db(host, port, user, password, dbname):
+    # This is for SQLite; for other databases, modify the connection string
+    conn_str = f"sqlite:///{dbname}"
+    return sqlite3.connect(conn_str)
+
+
+def get_table_download_link(df, filename="results.xlsx", text="Download results"):
+    """Generates a link allowing the data in a given panda dataframe to be downloaded"""
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, sheet_name='Sheet1')
+    binary_data = output.getvalue()
+    b64 = base64.b64encode(binary_data).decode()
+    return f'<a href="data:application/octet-stream;base64,{b64}" download="{filename}">{text}</a>'
+
+
+
+def is_select_statement(query):
+    parsed = sqlparse.parse(query)
+    if parsed:
+        return parsed[0].get_type().lower() == 'select'
+    return False
+
+def generate_sql_query(prompt, formatted_metadata):
+    # Set up the conversation with the model
+    messages = [
+
+{"role": "system", "content": f"""Based on the provided metadata, generate a SQL query in accordance with the following rules:
+
+Metadata
+
+Tables and columns:
+
+Tables: {formatted_metadata['tables']}
+
+Columns: {formatted_metadata['columns']}
+
+User's Prompt: {prompt}
+
+custom styles.html
+
+output.json
+
+Please adhere to these guidelines:
+
+IMPORTANT: If a request involves attributes, columns or relationships NOT present in the provided metadata, DO NOT genaret SQL query for it. Instead, respond with "The requested data is not available in the provided metadata"
+
+1. The Tables and Columns provided are the only permissible entities to be used in the SQL. Do not assume or introduce any table or column not mentionend explicitly in the meadata.
+
+2. Do not expand upon or make assumptions about the database schema based on the user's prompt. If the user asks for the data not in the provided metadata, it should be considered out of scope.
+
+3. Ensure every column referred to in the SQL is directly tracebale back to the provided metadata (Tables/Columns). No columns should be synthesized or assumed based on context. 4. Do not create or reference temporary, derieved, or virtual tables that aren't explicitly part of the provided metadata.
+
+5. If a user prompt can be interpreted in multiple ways, cross-reference with the metadata to choose the interpretation that matches the available tables and columns. 6. Do not make assumptions about the relationship between tables unless it is clear from the metadata
+
+7. If the user's prompt is at odds with the provided metadata, prioritize the metadatas constraints. return a note or an error about the discrepancy rather than trying to fill the gaps with assumptions. 8. Avoid generating subqueries that intoduce tables or columns not present in the provided metadata, even if they might seem contextually relevant to the user's prompt.
+
+9. If a user prompt request data or relationship not covered in the metadata, instead of making assumptions or introductions, consider providing a transparent message or feedack indicating the mismatch.
+
+10. The SQL should be up to general standards and easy understandable
+
+11. Use consistent SQL syntax and formatting, maintaning the appropriate use of whitespace and indentation for redablity
+
+12. Do not include any feature, table or column, that is not provided in the given list 13. Ensure the query is accurate and does not have errors
+
+14. Use aliases for tables and sub-queries to enhance readability and ensure clarity in referencing. 15. Avoid using wildcards (") for selecting columns. Specify the exact column names required.
+
+16. Ensure that the queries are optimized for performance, ensuring that any joins or where clauses are using indexed columns wherever possible. 17. Avoid using nested queries unless absolutely necessary. and if used, they should not be overly complex or deeply nested.
+
+18. Use explicit 30IN' clauses instead of implict onces to improve readablity and ensure clarity in relationships between tables. 19. Do not use aggrehation funcations like 'SUM', 'AVG', etc unless the user's prompt explicitly asks for an aggregated result.
+
+20. Ensure that the selected columns are relevant to the user's request and donot retrieve unnecessary data. 21. Where possible, encourage filtering data using 'WHERE' clause to limit data retrival to only what's necessary per user's request.
+
+22. The query should have a single responsiblity and not try to accomplish multiple unrelated tasks
+
+
+"""}
+    ]
+    
+    # Use OpenAI to generate SQL using the chat endpoint
+    response = openai.ChatCompletion.create(
+      model="gpt-3.5-turbo",
+      messages=messages
+    )
+    
+    # Extract the model's message from the response
+    return response.choices[0].message['content'].strip()
+
+def review_sql_query(generated_sql, formatted_metadata):
+    # Set up the conversation with the model for reviewing the SQL
+    messages = [
+        {"role": "system", "content": f"""
+The following SQL query has been generated:
+
+{generated_sql}
+
+Please review the query based on the provided metadata:
+
+Tables: {formatted_metadata['tables']}
+Columns: {formatted_metadata['columns']}
+
+Ensure that the query:
+1. Uses only the tables and columns mentioned in the metadata.
+2. Is optimized and adheres to SQL standards.
+3. Does not introduce or assume any tables or columns not explicitly mentioned in the metadata.
+
+Provide an improved version of the query if necessary.
+"""}
+    ]
+    
+    # Use OpenAI to review the generated SQL using the chat endpoint
+    response = openai.ChatCompletion.create(
+      model="gpt-3.5-turbo",
+      messages=messages
+    )
+    
+    # Extract the model's message from the response
+    content = response.choices[0].message['content'].strip()
+    
+    # Check if the content starts with a common SQL statement keyword
+    if content.lower().startswith(("select", "update", "insert", "delete")):
+        return content
+    else:
+        # If not, assume the original SQL is correct
+        return generated_sql
+
+#-----------------------------------------------------------------------
+
+def query_result_data_with_openai(prompt, result_data):
+    # Set up the conversation with the model
+    messages = [
+        {"role": "system", "content": "You are provided with the following data. Answer questions based on this. If a visualization is requested, provide only pure Python code for plotting. Otherwise, provide a textual answer."},
+        {"role": "user", "content": result_data.to_string()},
+        {"role": "user", "content": prompt}
+    ]
+
+    # Use OpenAI to generate a response
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=messages
+    )
+
+    # Extract the model's message from the response
+    full_response = response.choices[0].message['content'].strip()
+    
+    # Split the response into answer and code
+    if "```python" in full_response and "```" in full_response:
+        # Split the response at the Python code block
+        parts = full_response.split("```python")
+        answer = parts[0].strip()
+        python_code = parts[1].rsplit("```", 1)[0].strip()
+        
+        # Properly indent the Python code (assuming 4 spaces for indentation)
+        python_code = '\n'.join(['    ' + line if line else line for line in python_code.split('\n')])
+    else:
+        answer = full_response
+        python_code = None
+
+    return answer, python_code
+
+#-----------------------------------------------------------------------
+
+# UI Components
+image = Image.open('Capture.png')
+st.image(image, width=200)
+st.title("SQL Query Generator using OpenAI")
+
+# Adjust the column widths
+left_column, spacing_column1 , middle_column, spacing_column2 ,right_column = st.columns([0.25, 0.010, 0.30, 0.010, 0.33])
+
+uploaded_file = None
+show_details = False
+
+with left_column:
+    # Use an expander for the upload button for a minimalistic look
+    with st.expander("Upload DB Metadata"):
+        uploaded_file = left_column.file_uploader("Choose JSON file", type="json")
+        
+    if uploaded_file:
+        metadata = json.load(uploaded_file)
+        formatted_metadata = format_metadata_for_prompt(metadata)
+
+with middle_column:
+    prompt = middle_column.text_area("Enter your prompt:")
+    if 'sql_query' not in st.session_state:
+        st.session_state.sql_query = ""
+    if 'show_execute_button' not in st.session_state:
+        st.session_state.show_execute_button = False
+    if middle_column.button("Generate"):
+        if prompt:
+            with st.spinner("Generating response..."):
+                st.session_state.sql_query = generate_sql_query(prompt, formatted_metadata)
+                st.session_state.sql_query = review_sql_query(st.session_state.sql_query, formatted_metadata)
+
+with right_column:
+    if st.session_state.sql_query:
+        st.write("Generated sql query:")
+        right_column.code(st.session_state.sql_query, language="sql")
+        if is_select_statement(st.session_state.sql_query):
+            # Hard-code the database connection details
+            db_host = "localhost"
+            db_port = "50003"
+            db_user = "test1"
+            db_pass = "test1"
+            db_name = "test1"
+            
+            try:
+                conn_str = f"mssql+pyodbc://{db_user}:{db_pass}@{db_host}\\SQLEXPRESS:{db_port}/{db_name}?driver=ODBC+Driver+17+for+SQL+Server"
+                engine = create_engine(conn_str)
+                st.session_state.connection = engine.connect()
+                #st.success("Connected successfully!")
+                st.session_state.show_execute_button = True
+            except Exception as e:
+                st.error(f"Error establishing connection: {str(e)}")
+        else:
+            st.warning("Only SELECT statements can be executed.")
+    
+    if st.session_state.show_execute_button:
+        if st.button("Execute Query"):
+            try:
+                df = pd.read_sql_query(st.session_state.sql_query, st.session_state.connection)
+                st.session_state.query_executed = True
+                st.session_state.query_result = df
+            except Exception as e:
+                st.error(f"Error executing query: {str(e)}")
+                st.session_state.query_executed = False
+
+
+
+# Define a custom style for the black container
+container_style = """
+<style>
+    .black-container {
+        background-color: black;
+        color: white;  # Set text color to white for readability
+        max-height: 500px;  # Set to desired fixed height
+        overflow: auto;  # Add scrolling for overflow content
+        width: 100%;  # Full width
+    }
+</style>
+"""
+
+st.markdown(container_style, unsafe_allow_html=True)
+
+if 'query_executed' in st.session_state and st.session_state.query_executed:
+    st.subheader('Results')
+    col1, col2 = st.columns([1, 10])
+    with col1:
+        num_rows = st.selectbox('Select rows:', options=[10, 50, 100, 200, 500, 1000], index=0)
+    
+    # Display the results within the black container
+    with st.markdown('<div class="black-container">', unsafe_allow_html=True):
+        st.write(st.session_state.query_result.head(num_rows))
+    st.markdown('</div>', unsafe_allow_html=True)  # End of the container
+
+    st.markdown(get_table_download_link(st.session_state.query_result), unsafe_allow_html=True)
+    st.subheader("Query the Result Data")
+    # Check if the 'query_data_clicked' key is in session state. If not, set it to False.
+    if 'query_data_clicked' not in st.session_state:
+        st.session_state.query_data_clicked = False
+
+    result_query_prompt = st.text_area("Enter your query for the result data:")
+
+    # Check for button click and toggle the state.
+    if st.button("Query Data"):
+        st.session_state.query_data_clicked = not st.session_state.query_data_clicked
+
+    # Check the state to decide whether to execute the code or not.
+    if st.session_state.query_data_clicked and result_query_prompt:
+        with st.spinner("Querying data..."):
+            answer, python_code = query_result_data_with_openai(result_query_prompt, st.session_state.query_result)
+            
+            # Display the textual answer
+            if answer:
+                st.write(answer)
+            
+            if python_code:
+                # Strip leading and trailing whitespace
+                python_code = python_code.replace("plt.show()", "st.pyplot(plt)")
+                python_code = '\n'.join([line.strip() for line in python_code.split('\n') if line.strip()])
+                df = st.session_state.query_result
+                try:
+                    exec(python_code)
+                except Exception as e:
+                    st.error(f"Error executing the code: {str(e)}")
+
