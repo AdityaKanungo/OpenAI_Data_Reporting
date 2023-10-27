@@ -77,7 +77,7 @@ def generate_description_with_openai(metadata):
             Could you assist me in articulating a comprehensive and insightful summary, 
             shedding light on the potential contents, overarching themes, and the unique aspects of this database? 
             I am aiming for a narrative that offers a holistic and nuanced understanding of how this database could be leveraged for analytical purposes.
-            Give 40 words description only.
+            Give a strictly 30 words description only.
             """
         )
 
@@ -101,9 +101,6 @@ def generate_description_with_openai(metadata):
 
 
 #------------------------------------------------
-
-
-
 
 
 
@@ -154,49 +151,101 @@ def generate_sql_query(prompt, formatted_metadata):
 Metadata
 
 Tables and columns:
-
 Tables: {formatted_metadata['tables']}
-
 Columns: {formatted_metadata['columns']}
-
 User's Prompt: {prompt}
 
-custom styles.html
+Step 1: Generate sql
 
-output.json
+Please adhere to these guidelines when generating SQL queries:
 
-Please adhere to these guidelines:
+**Data Availability and Schema Constraints:**
+1. Use only the tables and columns provided in the metadata for the SQL query. Introducing any table or column not explicitly mentioned in the metadata is not allowed.
+2. Avoid making assumptions or expansions upon the database schema based on the user's prompt. Treat any data not present in the provided metadata as out of scope.
+3. Ensure that every column referred to in the SQL query can be directly traced back to the provided metadata (Tables/Columns). Do not synthesize or assume any columns based on context.
+4. Do not create, reference, or rely on temporary, derived, or virtual tables that aren't explicitly part of the provided metadata.
 
-IMPORTANT: If a request involves attributes, columns or relationships NOT present in the provided metadata, DO NOT genaret SQL query for it. Instead, respond with "The requested data is not available in the provided metadata"
+**Query Interpretation and Assumptions:**
+5. If a user prompt is ambiguous and can be interpreted in multiple ways, refer back to the metadata to select the interpretation that aligns with the available tables and columns.
+6. Do not make assumptions about the relationships between tables unless such relationships are clear and explicit in the metadata.
+7. If the user's prompt conflicts with the provided metadata, prioritize adhering to the metadata's constraints. Provide a clear message or error about the discrepancy rather than filling gaps with assumptions.
+8. Avoid generating subqueries that introduce tables or columns not present in the provided metadata.
+9. Do not infer joins or relationships between tables that are not explicitly stated in the metadata.
 
-1. The Tables and Columns provided are the only permissible entities to be used in the SQL. Do not assume or introduce any table or column not mentionend explicitly in the meadata.
+**SQL Query Standards and Practices:**
+10. Ensure that the generated SQL query adheres to general standards and is easily understandable.
+11. Maintain consistent SQL syntax and formatting, with appropriate use of whitespace and indentation for readability.
+12. Use aliases for tables and sub-queries to enhance readability and ensure clarity in referencing.
+13. When using JOIN operations, ensure that the ON clause explicitly states the criteria for the join, and avoid using USING as it might not be clear which columns are being used for the join, especially if the tables have multiple columns with the same name.
+14. Ensure that any GROUP BY statements are accompanied by the necessary aggregate functions or conditions to provide meaningful results.
+15. Use comments in the SQL code to explain complex logic or decisions made during query generation.
 
-2. Do not expand upon or make assumptions about the database schema based on the user's prompt. If the user asks for the data not in the provided metadata, it should be considered out of scope.
+**Query Optimization and Performance:**
+16. Optimize the queries for performance, ensuring that joins and where clauses are using indexed columns wherever possible.
+17. Avoid using nested queries unless absolutely necessary. If used, they should not be overly complex or deeply nested.
+18. Utilize efficient filtering and sorting mechanisms, and avoid using functions on indexed columns in WHERE clauses as it can hinder performance.
 
-3. Ensure every column referred to in the SQL is directly tracebale back to the provided metadata (Tables/Columns). No columns should be synthesized or assumed based on context. 4. Do not create or reference temporary, derieved, or virtual tables that aren't explicitly part of the provided metadata.
+**Data Selection and Aggregation:**
+19. Ensure that the selected columns are relevant to the user's request and do not retrieve unnecessary data.
+20. Encourage filtering data using 'WHERE' clauses to limit data retrieval to only what's necessary per the user's request.
+21. Do not use aggregation functions like 'SUM', 'AVG', etc., unless the user's prompt explicitly asks for an aggregated result.
+22. Use explicit 'JOIN' clauses instead of implicit ones to improve readability and ensure clarity in relationships between tables.
 
-5. If a user prompt can be interpreted in multiple ways, cross-reference with the metadata to choose the interpretation that matches the available tables and columns. 6. Do not make assumptions about the relationship between tables unless it is clear from the metadata
+**Responsibility and Task Management:**
+23. Ensure that the query has a single responsibility and does not try to accomplish multiple unrelated tasks.
+24. Provide transparent messages or feedback indicating any mismatch or data limitations when a user's prompt requests data or relationships not covered in the metadata.
 
-7. If the user's prompt is at odds with the provided metadata, prioritize the metadatas constraints. return a note or an error about the discrepancy rather than trying to fill the gaps with assumptions. 8. Avoid generating subqueries that intoduce tables or columns not present in the provided metadata, even if they might seem contextually relevant to the user's prompt.
+**Additional Guidelines:**
+25. Ensure the query is accurate and does not have errors.
+26. When selecting all the columns from a table, it's acceptable to use '*' for simplicity, unless specific column names are required for clarity.
+27. Avoid using deprecated or obsolete SQL functions or syntax; ensure the generated SQL is up to date with current best practices.
+28. Ensure that any date or time-based queries take into account different time zones or formats if applicable.
+29. Provide clear and meaningful aliases for columns when renaming them using AS, to enhance the understandability of the results.
+30. Ensure that the query results are presented in a clear and organized manner, with appropriate sorting or ordering applied.
+31. Don't Concatenate columns, unless explicitly asked to do so.
+32. Don't create a sql query where you ask the use to input any information. e.g :SELECT OrderID, ProductID, UnitPrice, Quantity, Discount
+FROM Orders
+WHERE OrderID = <order_id>;
+33. Generate query according to Microsoft SQL Syntax. eg instaead of LIMIT use TOP
 
-9. If a user prompt request data or relationship not covered in the metadata, instead of making assumptions or introductions, consider providing a transparent message or feedack indicating the mismatch.
+These guidelines aim to ensure that the generated SQL queries are of high quality, adhere to best practices, and provide accurate and efficient results based on the available metadata.
 
-10. The SQL should be up to general standards and easy understandable
 
-11. Use consistent SQL syntax and formatting, maintaning the appropriate use of whitespace and indentation for redablity
+Step 1: review sql
 
-12. Do not include any feature, table or column, that is not provided in the given list 13. Ensure the query is accurate and does not have errors
+**Guidelines for Reviewing the SQL Query:**
 
-14. Use aliases for tables and sub-queries to enhance readability and ensure clarity in referencing. 15. Avoid using wildcards (") for selecting columns. Specify the exact column names required.
+**1. Table and Column Validation:**
+   - Ensure that the SQL query exclusively utilizes tables and columns that are listed in the provided metadata.
+   - Confirm that no external or unlisted tables or columns are assumed or introduced in the query.
 
-16. Ensure that the queries are optimized for performance, ensuring that any joins or where clauses are using indexed columns wherever possible. 17. Avoid using nested queries unless absolutely necessary. and if used, they should not be overly complex or deeply nested.
+**2. SQL Standards and Optimization:**
+   - Verify that the SQL query is optimized for performance, making use of indexed columns in JOIN operations and WHERE clauses.
+   - Check that the query adheres to SQL standards, maintaining consistent syntax, and formatting.
 
-18. Use explicit 30IN' clauses instead of implict onces to improve readablity and ensure clarity in relationships between tables. 19. Do not use aggrehation funcations like 'SUM', 'AVG', etc unless the user's prompt explicitly asks for an aggregated result.
+**3. Accuracy and Precision:**
+   - Make sure that the SQL query accurately represents the user’s request and retrieves the correct data.
+   - Confirm that all JOIN conditions are explicitly stated and that there is clarity in the relationships between tables.
 
-20. Ensure that the selected columns are relevant to the user's request and donot retrieve unnecessary data. 21. Where possible, encourage filtering data using 'WHERE' clause to limit data retrival to only what's necessary per user's request.
+**4. Error and Ambiguity Handling:**
+   - Ensure that the query does not contain any errors or ambiguous statements.
+   - In cases of ambiguity in the user’s prompt, verify that the interpretation chosen aligns with the available tables and columns in the metadata.
 
-22. The query should have a single responsiblity and not try to accomplish multiple unrelated tasks
+**5. Data Selection and Aggregation:**
+   - Confirm that the query selects only the necessary columns and does not retrieve excessive data.
+   - Check that any aggregation functions used in the query are appropriate and explicitly requested in the user’s prompt.
 
+**6. Clarity and Readability:**
+   - Ensure that the query is easy to read and understand, using aliases for tables and sub-queries where necessary.
+   - Verify that the formatting and indentation of the query enhance its readability.
+
+**7. Feedback and Transparency:**
+   - If the SQL query cannot be executed due to limitations in the provided metadata, provide clear and transparent feedback indicating the mismatch or data limitations.
+
+**Providing an Improved Version:**
+- If any issues are found based on the above guidelines, provide an improved version of the SQL query, ensuring alignment with the provided metadata and adherence to best practices.
+
+The final output should have just the sql statement without any comments or additional description
 
 """}
     ]
@@ -210,43 +259,38 @@ IMPORTANT: If a request involves attributes, columns or relationships NOT presen
     # Extract the model's message from the response
     return response.choices[0].message['content'].strip()
 
-def review_sql_query(generated_sql, formatted_metadata):
-    # Set up the conversation with the model for reviewing the SQL
+
+
+def generate_query_description(generated_sql, formatted_metadata):
+    # Formatting the metadata for better readability and understanding
+    tables_str = ", ".join(formatted_metadata['tables'])
+    columns_dict = formatted_metadata['columns']
+    columns_str = ", ".join([f"{table}: {', '.join(columns)}" for table, columns in columns_dict.items()])
+    
+    # Set up the conversation with the model
     messages = [
         {"role": "system", "content": f"""
-The following SQL query has been generated:
+Please generate stricktly 30 words description for the following SQL query based on the provided metadata.
 
+SQL Query:
 {generated_sql}
 
-Please review the query based on the provided metadata:
-
-Tables: {formatted_metadata['tables']}
-Columns: {formatted_metadata['columns']}
-
-Ensure that the query:
-1. Uses only the tables and columns mentioned in the metadata.
-2. Is optimized and adheres to SQL standards.
-3. Does not introduce or assume any tables or columns not explicitly mentioned in the metadata.
-
-Provide an improved version of the query if necessary.
+Metadata:
+Tables: {tables_str}
+Columns: {columns_str}
 """}
     ]
     
-    # Use OpenAI to review the generated SQL using the chat endpoint
+    # Use OpenAI to generate the description
     response = openai.ChatCompletion.create(
       model="gpt-3.5-turbo",
       messages=messages
     )
     
     # Extract the model's message from the response
-    content = response.choices[0].message['content'].strip()
+    description = response.choices[0]['message']['content'].strip()
     
-    # Check if the content starts with a common SQL statement keyword
-    if content.lower().startswith(("select", "update", "insert", "delete")):
-        return content
-    else:
-        # If not, assume the original SQL is correct
-        return generated_sql
+    return description
 
 #-----------------------------------------------------------------------
 def query_result_data_with_openai(prompt, result_data):
@@ -290,7 +334,9 @@ def query_result_data_with_openai(prompt, result_data):
 
     return answer, python_code
 
-#-----------------------------------------------------------------------
+#---------------------------------------------------------------------------------
+#   UI
+#---------------------------------------------------------------------------------
 
 # UI Components
 image = Image.open('Capture.png')
@@ -304,24 +350,41 @@ left_column, spacing_column1 , middle_column, spacing_column2 ,right_column = st
 with left_column:
     uploaded_file = left_column.file_uploader("Upload DB Metadata JSON file", type="json")
     if uploaded_file:
-        metadata = json.load(uploaded_file)
-        formatted_metadata = format_metadata_for_prompt(metadata)
-        
-        data_summary = generate_description_with_openai(metadata)
+        # Check if the file has changed since the last upload
+        if 'uploaded_file_name' not in st.session_state or st.session_state.uploaded_file_name != uploaded_file.name:
+            metadata = json.load(uploaded_file)
+            st.session_state.formatted_metadata = format_metadata_for_prompt(metadata)
+            
+            # Call the API to get the data description
+            data_summary = generate_description_with_openai(metadata)
+            
+            # Store the description and file name in the session state
+            st.session_state.data_summary = data_summary
+            st.session_state.uploaded_file_name = uploaded_file.name
+        else:
+            # If the file has not changed, use the stored description
+            data_summary = st.session_state.data_summary
+    else:
+        # If no file is uploaded, clear the stored description and file name
+        if 'data_summary' in st.session_state:
+            del st.session_state.data_summary
+        if 'uploaded_file_name' in st.session_state:
+            del st.session_state.uploaded_file_name
+        if 'formatted_metadata' in st.session_state:
+            del st.session_state.formatted_metadata
+        data_summary = None
 
-        # Print the data_summary for debugging
-        print("Data Summary:", data_summary)
-        st.write('<p style="font-size: 0.9em; margin-bottom: 5px;">Data Summary:</p>', unsafe_allow_html=True)
-        st.markdown(f"""
-        <div style='font-family: "Courier New", monospace; background-color: #253547; padding: 0px; border-radius: 5px; margin: 0; overflow-wrap: break-word; white-space: pre-wrap;'> 
-        <div style='margin-top: 0; padding-left: 1em; padding-right: 1em; color: white; font-size: 0.9em;'>
-        {data_summary}</div>
-        </div>
-        """, unsafe_allow_html=True)
+    if data_summary:
+        st.info(data_summary)
 
 
-
-
+st.markdown("""
+    <style>
+        .stAlert > div {
+            font-size: 4px !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 with middle_column:
     prompt = middle_column.text_area("Enter the question for the data you are looking for:")
@@ -330,16 +393,27 @@ with middle_column:
     if 'show_execute_button' not in st.session_state:
         st.session_state.show_execute_button = False
     if middle_column.button("Generate SQL"):
-        if prompt:
+        if prompt and 'formatted_metadata' in st.session_state:
             with st.spinner("Generating response..."):
-                st.session_state.sql_query = generate_sql_query(prompt, formatted_metadata)
-                st.session_state.sql_query = review_sql_query(st.session_state.sql_query, formatted_metadata)
+                st.session_state.sql_query = generate_sql_query(prompt, st.session_state.formatted_metadata)
+                if 'data_summary' in st.session_state:
+                    st.session_state.sql_description = generate_query_description(st.session_state.sql_query, st.session_state.formatted_metadata)
+
+
+
+    # Add an image below
+    #image_path = "Capture21342.png"  # Change this to the path of your image
+    #st.image(image_path, use_column_width='always')
 
 with right_column:
     # Display the generated SQL Query
     if st.session_state.sql_query:
         right_column.write('<p style="font-size: 0.9em; margin-bottom: 5px;">Generated SQL Query:</p>', unsafe_allow_html=True)
         right_column.code(st.session_state.sql_query, language="sql")
+
+        if 'sql_description' in st.session_state and st.session_state.sql_description:
+            #right_column.write('<p style="font-size: 0.9em; margin-top: 20px; margin-bottom: 5px;">SQL Query Description:</p>', unsafe_allow_html=True)
+            right_column.info(st.session_state.sql_description)
         
         # Check if the query is a SELECT statement
         if is_select_statement(st.session_state.sql_query):
@@ -380,8 +454,18 @@ with right_column:
                 df.index = df.index + 1
                 st.session_state.query_executed = True
                 st.session_state.query_result = df
+                st.session_state.query_data_clicked = False
             except Exception as e:
-                st.error("There was an error executing the query, rephrase your question or try again.")
+                st.error("There was an error executing the query, try rephrasing your question to generate new SQL.")
+                
+                # Extract main error line
+                match = re.search(r"\[SQL Server\](.*?)\(\d+\)", str(e))
+                if match:
+                    main_error_line = match.group(1).strip()
+                    st.error(main_error_line)
+                else:
+                    st.error("An unexpected error occurred. Please check the query and try again.")
+                
                 st.session_state.query_executed = False
         else:
             # If it is not a SELECT statement, show a warning message
@@ -440,17 +524,20 @@ with st.container():
             st.subheader("Analyze Result Data")
 
 
-        with tab2:
-            st.subheader("Database Tables and Columns:")
-            details = []
-            for table, columns in formatted_metadata['columns'].items():
-                line = f"<div style='margin-top: 0; padding: 0;'><strong style='color: #007ACC;'>{table}</strong>: <span style='color: #FFFFFF;'>{', '.join(columns)}</span></div>"
-                details.append(line)
-            st.markdown(f"""
-            <div style='white-space: pre-wrap; overflow-wrap: break-word; font-family: "Courier New", monospace; background-color: #253547; padding: 10px; border-radius: 5px; margin: 0; padding: 0;'>
-            <div style='margin-top: 0; padding-left: 1em;'>{''.join(details)}</div>
-            </div>
-            """, unsafe_allow_html=True)
+            with tab2:
+                        if 'formatted_metadata' in st.session_state:
+                            st.subheader("Database Tables and Columns:")
+                            details = []
+                            for table, columns in st.session_state.formatted_metadata['columns'].items():
+                                line = f"<div style='margin-top: 0; padding: 0;'><strong style='color: #007ACC;'>{table}</strong>: <span style='color: #FFFFFF;'>{', '.join(columns)}</span></div>"
+                                details.append(line)
+                            st.markdown(f"""
+                            <div style='white-space: pre-wrap; overflow-wrap: break-word; font-family: "Courier New", monospace; background-color: #253547; padding: 10px; border-radius: 5px; margin: 0; padding: 0;'>
+                            <div style='margin-top: 0; padding-left: 1em;'>{''.join(details)}</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.warning("Please upload the database metadata JSON file to view the database tables and columns.")
 
 
     # Initialize session state
@@ -486,6 +573,6 @@ with st.container():
                 col1, col2, col3 = st.columns([1, 1, 1])
                 with col2:
                     exec(python_code, globals())
-                    st.pyplot(plt)
+                    #st.pyplot(plt)
             except Exception as e:
                 st.error(f"Error executing the code: {str(e)}")
