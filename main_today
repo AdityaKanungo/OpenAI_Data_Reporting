@@ -142,8 +142,50 @@ def is_select_statement(query):
         return parsed[0].get_type().lower() == 'select'
     return False
 
+
+import spacy
+
+nlp = spacy.load("en_core_web_sm")
+
+def is_prompt_relevant_to_metadata(prompt, formatted_metadata):
+    # Define your own stop words
+    custom_stop_words = {"is", "are", "the", "of", "and", "a", "to", "in", "that", "it", "with", "as", "for", "on", "was", "at", "by", "an", "be", "this", "which", "or", "from", "but", "not", "can", "they", "their", "you", "have", "had", "all", "my", "we", "do", "if", "me", "so", "what", "him", "your", "no", "there", "when", "up", "out", "who", "them", "then", "she", "each", "would", "about", "how", "other", "into", "could", "her", "has", "said", "just", "some", "like", "any", "more", "also", "now", "see", "only", "his", "been", "because", "did", "get", "come", "made", "two", "over", "know", "use", "way", "even", "new", "after", "us", "time", "many", "well", "may", "where", "most", "these", "very", "before", "need", "here", "much", "those", "must", "such", "why", "going", "big", "through", "our", "part", "little", "never", "around", "went", "people", "take", "long", "still", "find", "own", "down", "keep", "every", "another", "being", "once", "does", "got", "really", "say", "might", "always", "things", "want", "give", "using", "goes", "think", "better", "great", "right", "thing", "yes", "back", "should", "off", "take", "while", "same", "around", "going", "thing", "give", "using", "think", "better"}
+
+
+    # Tokenize the prompt
+    prompt_doc = nlp(prompt.lower())
+    
+    # Include tokens that are alpha characters and not in the custom stop words list,
+    # or tokens that are part of the metadata names
+    all_names = set()
+    for table, columns in formatted_metadata['columns'].items():
+        all_names.add(table.lower())
+        for column in columns:
+            all_names.add(column.lower())
+    
+    prompt_tokens = [nlp(token.text)[0] for token in prompt_doc if token.is_alpha and (token.text not in custom_stop_words or token.text in all_names)]
+    
+    # Calculate the relevance score based on similarity
+    relevance_score = 0
+    for token in prompt_tokens:
+        similarities = [token.similarity(nlp(name)[0]) for name in all_names]
+        relevance_score += max(similarities) if similarities else 0
+
+    relevance_score /= len(prompt_tokens) if prompt_tokens else 0
+
+    relevance_threshold = 0.75
+    st.write('Relevance Score:', relevance_score)
+    st.write('Prompt Tokens:', prompt_tokens)
+    st.write('Metadata Names:', all_names)
+    
+    if relevance_score >= relevance_threshold:
+        return 1
+    else:
+        return 2
+
+
 def generate_sql_query(prompt, formatted_metadata):
-    # Set up the conversation with the model
+    # Check if the prompt is relevant to the metadata
     messages = [
 
 {"role": "system", "content": f"""Based on the provided metadata, generate a SQL query in accordance with the following rules:
@@ -394,11 +436,19 @@ with middle_column:
         st.session_state.show_execute_button = False
     if middle_column.button("Generate SQL"):
         if prompt and 'formatted_metadata' in st.session_state:
-            with st.spinner("Generating response..."):
-                st.session_state.sql_query = generate_sql_query(prompt, st.session_state.formatted_metadata)
-                if 'data_summary' in st.session_state:
-                    st.session_state.sql_description = generate_query_description(st.session_state.sql_query, st.session_state.formatted_metadata)
-
+            with st.spinner("Checking prompt relevance..."):
+                relevance_code = is_prompt_relevant_to_metadata(prompt, st.session_state.formatted_metadata)
+                
+            if relevance_code == 2:
+                st.error("The prompt does not seem to be relevant to the metadata.")
+            else:
+                with st.spinner("Generating response..."):
+                    st.session_state.sql_query = generate_sql_query(prompt, st.session_state.formatted_metadata)
+                    if st.session_state.sql_query.startswith("ERROR"):
+                        st.error(st.session_state.sql_query)
+                    else:
+                        if 'data_summary' in st.session_state:
+                            st.session_state.sql_description = generate_query_description(st.session_state.sql_query, st.session_state.formatted_metadata)
 
 
     # Add an image below
@@ -576,3 +626,38 @@ with st.container():
                     #st.pyplot(plt)
             except Exception as e:
                 st.error(f"Error executing the code: {str(e)}")
+
+
+
+#-----------------------------------------------------------
+
+# - Only using metadata
+
+import streamlit as st
+
+# Initialize session state
+if 'query_data_clicked' not in st.session_state:
+    st.session_state.query_data_clicked = False
+
+# User input for query
+result_query_prompt = st.text_area("Enter your question about the data structure:")
+
+# Button to trigger query
+if st.button("Generate Results"):
+    st.session_state.query_data_clicked = not st.session_state.query_data_clicked
+
+# Handle query and display results
+if st.session_state.query_data_clicked and result_query_prompt:
+    with st.spinner("Analyzing data structure..."):
+        # Extract metadata from the DataFrame
+        df_metadata = extract_metadata(st.session_state.query_result)
+
+        # Check if the prompt is relevant to the metadata
+        relevance_code = is_prompt_relevant_to_metadata(result_query_prompt, df_metadata)
+        if relevance_code == 1:
+            # If relevant, generate an answer based on the metadata
+            answer = generate_answer_from_metadata(result_query_prompt, df_metadata)
+            st.write(answer)
+        else:
+            st.warning("The question does not seem to be relevant to the data structure.")
+
