@@ -1,0 +1,35 @@
+Guidelines for Generating SQL Queries:
+
+1. Strict Adherence to Metadata:
+
+    Only use tables and columns listed in the provided metadata, avoiding assumptions or expansions upon the database schema.
+
+2. Clear Interpretation and Error Handling:
+
+    Address ambiguous prompts based on metadata and prioritize metadata constraints, providing clear messages for discrepancies.
+
+3. Maintain SQL Standards and Readability:
+
+    Adhere to SQL best practices, ensuring readability with consistent syntax, formatting, and explicit JOIN conditions.
+
+4. Optimization and Efficient Data Retrieval:
+
+    Optimize queries for performance, using indexed columns and efficient filtering, while avoiding unnecessary data retrieval and complex nested queries.
+
+Guidelines for Reviewing SQL Queries:
+
+1. Validation of Tables and Columns:
+
+    Ensure all tables and columns used are listed in the provided metadata, with no external assumptions.
+
+2. Adherence to SQL Standards and Performance:
+
+    Confirm the query’s optimization for performance and adherence to SQL standards.
+
+3. Accuracy and Clarity:
+
+    Validate the accuracy of the query in representing the user’s request and ensure clarity in table relationships and data retrieval.
+
+4. Feedback and Improvement:
+
+    Provide transparent feedback on any limitations, and offer improved versions of the query when necessary, enhancing clarity and adherence to best practices.
