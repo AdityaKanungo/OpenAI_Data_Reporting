@@ -173,9 +173,9 @@ def is_prompt_relevant_to_metadata(prompt, formatted_metadata):
 
     relevance_score /= len(prompt_tokens) if prompt_tokens else 0
 
-    relevance_threshold = 0.75
+    relevance_threshold = 0.85
     st.write('Relevance Score:', relevance_score)
-    st.write('Prompt Tokens:', prompt_tokens)
+    st.write('Prompt Tokens:', set(prompt_tokens))
     st.write('Metadata Names:', all_names)
     
     if relevance_score >= relevance_threshold:
@@ -335,21 +335,11 @@ Columns: {columns_str}
     return description
 
 #-----------------------------------------------------------------------
-def query_result_data_with_openai(prompt, result_data):
+def query_result_data_with_openai(prompt, df_columns):
     # Set up the conversation with the model
+    columns_info = "\n".join([f"{col}: {dtype}" for col, dtype in df_columns.items()])
     messages = [
-        {"role": "system", "content": """You are provided with the following data. Answer questions based on this. 
-                                         If a visualization is requested, provide only pure Python code for plotting.
-                                         only use the result data in the dataframe, don't create code for uploading csv
-
-                                         Only use these packages: numpy, pandas, matplotlib, for visualization.
-                                         Use 'df' as the dataframe variable. Example: df = result_data
-
-                                        
-                                         Provide the entire code for the plot, not in different parts.
-
-                                         Otherwise, provide a textual answer."""},
-        {"role": "user", "content": result_data.to_string()},
+        {"role": "system", "content": "You are provided with a dataframe 'df' that has the following columns and their data types: \n" + columns_info + "\nAnswer questions based on this and provide Python code for plotting using any of these if required : numpy, pandas, plotly, and matplotlib. Add colors if required"},
         {"role": "user", "content": prompt}
     ]
 
@@ -601,10 +591,15 @@ with st.container():
     if st.button("Generate Results"):
         st.session_state.query_data_clicked = not st.session_state.query_data_clicked
 
+    
     # Handle query and display results
     if st.session_state.query_data_clicked and result_query_prompt:
         with st.spinner("Querying data..."):
-            answer, python_code = query_result_data_with_openai(result_query_prompt, st.session_state.query_result)
+            # Fetching column names and data types
+            df_columns = {col: str(dtype) for col, dtype in st.session_state.query_result.dtypes.items()}
+            
+            # Generating Python code for plotting
+            answer, python_code = query_result_data_with_openai(result_query_prompt, df_columns)
             
             # Display the textual answer
             if answer:
@@ -617,47 +612,14 @@ with st.container():
                 # Prepare the Python code for execution
                 python_code = f'df = st.session_state.query_result\nimport matplotlib.pyplot as plt\nplt.figure(figsize=({fig_width}, {fig_height}))\n{python_code}\nst.pyplot(plt)'
                 
-            try:
-                # Execute the Python code
-                # Create a layout with three columns
-                col1, col2, col3 = st.columns([1, 1, 1])
-                with col2:
+                try:
+                    # Execute the Python code
                     exec(python_code, globals())
-                    #st.pyplot(plt)
-            except Exception as e:
-                st.error(f"Error executing the code: {str(e)}")
+                except Exception as e:
+                    st.error(f"Error executing the code: {str(e)}")
 
 
 
 #-----------------------------------------------------------
 
-# - Only using metadata
-
-import streamlit as st
-
-# Initialize session state
-if 'query_data_clicked' not in st.session_state:
-    st.session_state.query_data_clicked = False
-
-# User input for query
-result_query_prompt = st.text_area("Enter your question about the data structure:")
-
-# Button to trigger query
-if st.button("Generate Results"):
-    st.session_state.query_data_clicked = not st.session_state.query_data_clicked
-
-# Handle query and display results
-if st.session_state.query_data_clicked and result_query_prompt:
-    with st.spinner("Analyzing data structure..."):
-        # Extract metadata from the DataFrame
-        df_metadata = extract_metadata(st.session_state.query_result)
-
-        # Check if the prompt is relevant to the metadata
-        relevance_code = is_prompt_relevant_to_metadata(result_query_prompt, df_metadata)
-        if relevance_code == 1:
-            # If relevant, generate an answer based on the metadata
-            answer = generate_answer_from_metadata(result_query_prompt, df_metadata)
-            st.write(answer)
-        else:
-            st.warning("The question does not seem to be relevant to the data structure.")
 
