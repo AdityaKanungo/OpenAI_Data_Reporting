@@ -8,6 +8,7 @@ import sqlite3
 import ast
 import pandas as pd
 import re
+import squarify
 import seaborn as sns
 import matplotlib.pyplot as plt
 import sqlparse
@@ -172,11 +173,12 @@ def is_prompt_relevant_to_metadata(prompt, formatted_metadata):
         relevance_score += max(similarities) if similarities else 0
 
     relevance_score /= len(prompt_tokens) if prompt_tokens else 0
+    relevance_score = round(relevance_score,2)
 
     relevance_threshold = 0.85
     st.write('Relevance Score:', relevance_score)
-    st.write('Prompt Tokens:', set(prompt_tokens))
-    st.write('Metadata Names:', all_names)
+    #st.write('Prompt Tokens:', set(prompt_tokens))
+    #st.write('Metadata Names:', all_names)
     
     if relevance_score >= relevance_threshold:
         return 1
@@ -188,105 +190,65 @@ def generate_sql_query(prompt, formatted_metadata):
     # Check if the prompt is relevant to the metadata
     messages = [
 
-{"role": "system", "content": f"""Based on the provided metadata, generate a SQL query in accordance with the following rules:
+{"role": "system", "content": f"""
 
-Metadata
+Generate a SQL SELECT query that is compatible with MS SQL and achieves the OBJECTIVE exclusively using only the tables and views described in "SCHEMA:".
 
+Only generate SQL if the OBJECTIVE can be answered by querying a database with tables described in SCHEMA.
+
+Do not include any explanations, only provide valid SQL.
+
+[BEGIN EXAMPLE]
+
+SCHEMA:
+description: historical record of concerts, stadiums and singers
+tables:
+  - stadium: 
+    columns:
+      Stadium_ID: 
+      Location: 
+      Name: 
+      Capacity: 
+      Highest: 
+      Lowest: 
+      Average: 
+  - singer: 
+    columns:
+      Singer_ID: 
+      Name: 
+      Country: 
+      Song_Name: 
+      Song_release_year: 
+      Age: 
+      Is_male: 
+  - concert: 
+    columns:
+      concert_ID: 
+      concert_Name: 
+      Theme: 
+      Stadium_ID: 
+      Year: 
+  - singer_in_concert: 
+    columns:
+      concert_ID: 
+      Singer_ID: 
+references:
+  concert.Stadium_ID: stadium.Stadium_ID
+  singer_in_concert.concert_ID: concert.concert_ID
+  singer_in_concert.Singer_ID: singer.Singer_ID
+
+OBJECTIVE: "How many heads of the departments are older than 56 ?"
+SQL: select count(*) department_head_count from head where age > 56
+
+[END EXAMPLE]
+
+SCHEMA:
 Tables and columns:
 Tables: {formatted_metadata['tables']}
 Columns: {formatted_metadata['columns']}
-User's Prompt: {prompt}
 
-Step 1: Generate sql
-
-Please adhere to these guidelines when generating SQL queries:
-
-**Data Availability and Schema Constraints:**
-1. Use only the tables and columns provided in the metadata for the SQL query. Introducing any table or column not explicitly mentioned in the metadata is not allowed.
-2. Avoid making assumptions or expansions upon the database schema based on the user's prompt. Treat any data not present in the provided metadata as out of scope.
-3. Ensure that every column referred to in the SQL query can be directly traced back to the provided metadata (Tables/Columns). Do not synthesize or assume any columns based on context.
-4. Do not create, reference, or rely on temporary, derived, or virtual tables that aren't explicitly part of the provided metadata.
-
-**Query Interpretation and Assumptions:**
-5. If a user prompt is ambiguous and can be interpreted in multiple ways, refer back to the metadata to select the interpretation that aligns with the available tables and columns.
-6. Do not make assumptions about the relationships between tables unless such relationships are clear and explicit in the metadata.
-7. If the user's prompt conflicts with the provided metadata, prioritize adhering to the metadata's constraints. Provide a clear message or error about the discrepancy rather than filling gaps with assumptions.
-8. Avoid generating subqueries that introduce tables or columns not present in the provided metadata.
-9. Do not infer joins or relationships between tables that are not explicitly stated in the metadata.
-
-**SQL Query Standards and Practices:**
-10. Ensure that the generated SQL query adheres to general standards and is easily understandable.
-11. Maintain consistent SQL syntax and formatting, with appropriate use of whitespace and indentation for readability.
-12. Use aliases for tables and sub-queries to enhance readability and ensure clarity in referencing.
-13. When using JOIN operations, ensure that the ON clause explicitly states the criteria for the join, and avoid using USING as it might not be clear which columns are being used for the join, especially if the tables have multiple columns with the same name.
-14. Ensure that any GROUP BY statements are accompanied by the necessary aggregate functions or conditions to provide meaningful results.
-15. Use comments in the SQL code to explain complex logic or decisions made during query generation.
-
-**Query Optimization and Performance:**
-16. Optimize the queries for performance, ensuring that joins and where clauses are using indexed columns wherever possible.
-17. Avoid using nested queries unless absolutely necessary. If used, they should not be overly complex or deeply nested.
-18. Utilize efficient filtering and sorting mechanisms, and avoid using functions on indexed columns in WHERE clauses as it can hinder performance.
-
-**Data Selection and Aggregation:**
-19. Ensure that the selected columns are relevant to the user's request and do not retrieve unnecessary data.
-20. Encourage filtering data using 'WHERE' clauses to limit data retrieval to only what's necessary per the user's request.
-21. Do not use aggregation functions like 'SUM', 'AVG', etc., unless the user's prompt explicitly asks for an aggregated result.
-22. Use explicit 'JOIN' clauses instead of implicit ones to improve readability and ensure clarity in relationships between tables.
-
-**Responsibility and Task Management:**
-23. Ensure that the query has a single responsibility and does not try to accomplish multiple unrelated tasks.
-24. Provide transparent messages or feedback indicating any mismatch or data limitations when a user's prompt requests data or relationships not covered in the metadata.
-
-**Additional Guidelines:**
-25. Ensure the query is accurate and does not have errors.
-26. When selecting all the columns from a table, it's acceptable to use '*' for simplicity, unless specific column names are required for clarity.
-27. Avoid using deprecated or obsolete SQL functions or syntax; ensure the generated SQL is up to date with current best practices.
-28. Ensure that any date or time-based queries take into account different time zones or formats if applicable.
-29. Provide clear and meaningful aliases for columns when renaming them using AS, to enhance the understandability of the results.
-30. Ensure that the query results are presented in a clear and organized manner, with appropriate sorting or ordering applied.
-31. Don't Concatenate columns, unless explicitly asked to do so.
-32. Don't create a sql query where you ask the use to input any information. e.g :SELECT OrderID, ProductID, UnitPrice, Quantity, Discount
-FROM Orders
-WHERE OrderID = <order_id>;
-33. Generate query according to Microsoft SQL Syntax. eg instaead of LIMIT use TOP
-
-These guidelines aim to ensure that the generated SQL queries are of high quality, adhere to best practices, and provide accurate and efficient results based on the available metadata.
-
-
-Step 1: review sql
-
-**Guidelines for Reviewing the SQL Query:**
-
-**1. Table and Column Validation:**
-   - Ensure that the SQL query exclusively utilizes tables and columns that are listed in the provided metadata.
-   - Confirm that no external or unlisted tables or columns are assumed or introduced in the query.
-
-**2. SQL Standards and Optimization:**
-   - Verify that the SQL query is optimized for performance, making use of indexed columns in JOIN operations and WHERE clauses.
-   - Check that the query adheres to SQL standards, maintaining consistent syntax, and formatting.
-
-**3. Accuracy and Precision:**
-   - Make sure that the SQL query accurately represents the user’s request and retrieves the correct data.
-   - Confirm that all JOIN conditions are explicitly stated and that there is clarity in the relationships between tables.
-
-**4. Error and Ambiguity Handling:**
-   - Ensure that the query does not contain any errors or ambiguous statements.
-   - In cases of ambiguity in the user’s prompt, verify that the interpretation chosen aligns with the available tables and columns in the metadata.
-
-**5. Data Selection and Aggregation:**
-   - Confirm that the query selects only the necessary columns and does not retrieve excessive data.
-   - Check that any aggregation functions used in the query are appropriate and explicitly requested in the user’s prompt.
-
-**6. Clarity and Readability:**
-   - Ensure that the query is easy to read and understand, using aliases for tables and sub-queries where necessary.
-   - Verify that the formatting and indentation of the query enhance its readability.
-
-**7. Feedback and Transparency:**
-   - If the SQL query cannot be executed due to limitations in the provided metadata, provide clear and transparent feedback indicating the mismatch or data limitations.
-
-**Providing an Improved Version:**
-- If any issues are found based on the above guidelines, provide an improved version of the SQL query, ensuring alignment with the provided metadata and adherence to best practices.
-
+OBJECTIVE: {prompt}
+SQL: Let's think step by step.
 The final output should have just the sql statement without any comments or additional description
 
 """}
@@ -339,7 +301,7 @@ def query_result_data_with_openai(prompt, df_columns):
     # Set up the conversation with the model
     columns_info = "\n".join([f"{col}: {dtype}" for col, dtype in df_columns.items()])
     messages = [
-        {"role": "system", "content": "You are provided with a dataframe 'df' that has the following columns and their data types: \n" + columns_info + "\nAnswer questions based on this and provide Python code for plotting using any of these if required : numpy, pandas, plotly, and matplotlib. Add colors if required"},
+        {"role": "system", "content": "You are provided with a dataframe 'df' that has the following columns and their data types: \n" + columns_info + "\nAnswer questions based on this and provide Python code for plotting using any of these if required : numpy, pandas, plotly, and matplotlib. Add colors to the plots. Use st.plotly_chart(fig) if using plotly"},
         {"role": "user", "content": prompt}
     ]
 
@@ -365,6 +327,7 @@ def query_result_data_with_openai(prompt, df_columns):
         python_code = None
 
     return answer, python_code
+
 
 #---------------------------------------------------------------------------------
 #   UI
@@ -479,7 +442,7 @@ with right_column:
     else:
         # If no SQL query is generated yet, display a placeholder
         right_column.write('<p style="font-size: 0.9em; margin-bottom: 5px;">Generated SQL Query:</p>', unsafe_allow_html=True)
-        right_column.code("""e.g : SELECT * FROM Products ORDER BY Price DESC;""", language="sql")
+        right_column.code("""""", language="sql")
 
 
 
@@ -591,15 +554,10 @@ with st.container():
     if st.button("Generate Results"):
         st.session_state.query_data_clicked = not st.session_state.query_data_clicked
 
-    
     # Handle query and display results
     if st.session_state.query_data_clicked and result_query_prompt:
         with st.spinner("Querying data..."):
-            # Fetching column names and data types
-            df_columns = {col: str(dtype) for col, dtype in st.session_state.query_result.dtypes.items()}
-            
-            # Generating Python code for plotting
-            answer, python_code = query_result_data_with_openai(result_query_prompt, df_columns)
+            answer, python_code = query_result_data_with_openai(result_query_prompt, st.session_state.query_result)
             
             # Display the textual answer
             if answer:
@@ -612,11 +570,15 @@ with st.container():
                 # Prepare the Python code for execution
                 python_code = f'df = st.session_state.query_result\nimport matplotlib.pyplot as plt\nplt.figure(figsize=({fig_width}, {fig_height}))\n{python_code}\nst.pyplot(plt)'
                 
-                try:
-                    # Execute the Python code
+            try:
+                # Execute the Python code
+                # Create a layout with three columns
+                col1, col2, col3 = st.columns([1, 1, 1])
+                with col2:
                     exec(python_code, globals())
-                except Exception as e:
-                    st.error(f"Error executing the code: {str(e)}")
+                    #st.pyplot(plt)
+            except Exception as e:
+                st.error(f"Error executing the code: {str(e)}")
 
 
 
