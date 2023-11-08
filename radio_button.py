@@ -17,6 +17,12 @@ warnings.filterwarnings("ignore")
 import sqlparse
 from sqlalchemy import create_engine
 
+
+
+
+# Initialize the OpenAI API
+openai.api_key = ""
+
 # Streamlit UI Configuration
 st.set_page_config(page_title="SQL Query Generator", layout="wide")
 
@@ -104,19 +110,16 @@ def generate_description_with_openai(metadata):
 #------------------------------------------------
 
 
-
-# Initialize the OpenAI API
-openai.api_key = ""
-
-
 def format_metadata_for_prompt(metadata):
     if isinstance(metadata, list):
         tables = [item['name'] for item in metadata]
         columns = {table['name']: [col['name'] for col in table['columns']] for table in metadata}
+        descriptions = {table['description']: [col['description'] for col in table['columns']] for table in metadata}
     else:
         tables = list(metadata.keys())
         columns = {table: [col['name'] for col in metadata[table]['columns']] for table in tables}
-    return {"tables": tables, "columns": columns}
+        descriptions = {table: [col['description'] for col in metadata[table]['columns']] for table in tables}
+    return {"tables": tables, "columns": columns, "descriptions": descriptions}
 
 
 # Add a function to connect to the database
@@ -175,7 +178,7 @@ def is_prompt_relevant_to_metadata(prompt, formatted_metadata):
     relevance_score /= len(prompt_tokens) if prompt_tokens else 0
     relevance_score = round(relevance_score,2)
 
-    relevance_threshold = 0.85
+    relevance_threshold = 0.6
     st.write('Relevance Score:', relevance_score)
     #st.write('Prompt Tokens:', set(prompt_tokens))
     #st.write('Metadata Names:', all_names)
@@ -264,7 +267,7 @@ The final output should have just the sql statement without any comments or addi
     return response.choices[0].message['content'].strip()
 
 # Function to answer questions about the data
-def answer_data_question(prompt, df):
+def answer_data_question(prompt, df, meta_data):
     # Convert the DataFrame to a string in a CSV-like format for the prompt
     df_string = df.to_string()
 
@@ -276,7 +279,7 @@ def answer_data_question(prompt, df):
         },
         {
             "role": "user",
-            "content": f"{prompt}\n\nInput data:\n{df_string}"
+            "content": f"{prompt}\n\nInput data:\n{df_string}\n\nwith meta_data:\n{meta_data}"
         }
     ]
 
@@ -515,7 +518,7 @@ with right_column:
             db_port = "50003"
             db_user = "test1"
             db_pass = "test1"
-            db_name = "test1"
+            db_name = "TFS_test"
             try:
                 conn_str = f"mssql+pyodbc://{db_user}:{db_pass}@{db_host}\\SQLEXPRESS:{db_port}/{db_name}?driver=ODBC+Driver+17+for+SQL+Server"
                 engine = create_engine(conn_str)
@@ -638,15 +641,21 @@ with st.container():
 
     # Streamlit UI components
     result_query_prompt = st.text_area("Enter your question for additional analysis:")
-    analysis_type = st.radio("Choose an option:", ("Ask a question", "Plot a graph"))
+    #analysis_type = st.radio("Choose an option:", ("Ask a question", "Plot a graph"))
 
     # Button to trigger query or plot generation
     if st.button("Generate Results"):
         st.session_state.query_data_clicked = not st.session_state.query_data_clicked
 
+
     # Handle query and display results
     if st.session_state.get('query_data_clicked', False) and result_query_prompt:
         with st.spinner("Processing..."):
+            meta_data = st.session_state.formatted_metadata
+            if any(word in result_query_prompt for word in ["plot", "graph", "chart", "map", "bar", "line", "scatter", "tree", "heat", "pie"]):
+                analysis_type = "Plot a graph"
+            else:
+                analysis_type = "Ask a question"
             df = st.session_state.query_result  # Make sure this is defined in your session state
             df_h = df.head(30)  # Display a subset of the data
 
@@ -656,7 +665,7 @@ with st.container():
                     st.code(python_code)
                     exec(python_code, globals())
             elif analysis_type == "Ask a question":
-                answer = answer_data_question(result_query_prompt, df_h)
+                answer = answer_data_question(result_query_prompt, df_h, meta_data)
                 if answer:
                     st.write(answer)
 
