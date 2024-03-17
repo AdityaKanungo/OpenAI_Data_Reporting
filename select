@@ -1,0 +1,47 @@
+with bop_data as (
+    select "division", "group", "class", "subclass", "year", "metrics",
+           "jul", "aug", "sep", "oct", "nov", "dec", "jan", "feb", "mar", "apr", "may", "jun"
+    from metrics
+    where "metrics" = 'bop'
+),
+
+units_data as (
+    select "division", "group", "class", "subclass", "year", "metrics",
+           "jul", "aug", "sep", "oct", "nov", "dec", "jan", "feb", "mar", "apr", "may", "jun"
+    from metrics
+    where "metrics" = 'units'
+),
+
+ct_data as (
+    select 
+        bop."division", 
+        bop."group", 
+        bop."class", 
+        bop."subclass", 
+        CAST('ct' AS TEXT) AS "metrics",
+        bop.year,
+        bop."jul" / nullif(units."jul", 0) as "jul",
+        bop."jul" / nullif(units."jul", 0) + bop."aug" / nullif(units."aug", 0) as "aug",
+        bop."jul" / nullif(units."jul", 0) + bop."aug" / nullif(units."aug", 0) + bop."sep" / nullif(units."sep", 0) as "sep",
+        bop."jul" / nullif(units."jul", 0) + bop."aug" / nullif(units."aug", 0) + bop."sep" / nullif(units."sep", 0) + bop."oct" / nullif(units."oct", 0) as "oct",
+        bop."jul" / nullif(units."jul", 0) + bop."aug" / nullif(units."aug", 0) + bop."sep" / nullif(units."sep", 0) + bop."oct" / nullif(units."oct", 0) + bop."nov" / nullif(units."nov", 0) as "nov",
+        bop."jul" / nullif(units."jul", 0) + bop."aug" / nullif(units."aug", 0) + bop."sep" / nullif(units."sep", 0) + bop."oct" / nullif(units."oct", 0) + bop."nov" / nullif(units."nov", 0) + bop."dec" / nullif(units."dec", 0) as "dec",
+        bop."jul" / nullif(units."jul", 0) + bop."aug" / nullif(units."aug", 0) + bop."sep" / nullif(units."sep", 0) + bop."oct" / nullif(units."oct", 0) + bop."nov" / nullif(units."nov", 0) + bop."dec" / nullif(units."dec", 0) + bop."jan" / nullif(units."jan", 0) as "jan",
+        bop."jul" / nullif(units."jul", 0) + bop."aug" / nullif(units."aug", 0) + bop."sep" / nullif(units."sep", 0) + bop."oct" / nullif(units."oct", 0) + bop."nov" / nullif(units."nov", 0) + bop."dec" / nullif(units."dec", 0) + bop."jan" / nullif(units."jan", 0) + bop."feb" / nullif(units."feb", 0) as "feb",
+        bop."jul" / nullif(units."jul", 0) + bop."aug" / nullif(units."aug", 0) + bop."sep" / nullif(units."sep", 0) + bop."oct" / nullif(units."oct", 0) + bop."nov" / nullif(units."nov", 0) + bop."dec" / nullif(units."dec", 0) + bop."jan" / nullif(units."jan", 0) + bop."feb" / nullif(units."feb", 0)  + bop."mar" / nullif(units."mar", 0) as "mar",
+        bop."jul" / nullif(units."jul", 0) + bop."aug" / nullif(units."aug", 0) + bop."sep" / nullif(units."sep", 0) + bop."oct" / nullif(units."oct", 0) + bop."nov" / nullif(units."nov", 0) + bop."dec" / nullif(units."dec", 0) + bop."jan" / nullif(units."jan", 0) + bop."feb" / nullif(units."feb", 0)  + bop."mar" / nullif(units."mar", 0) + bop."apr" / nullif(units."apr", 0) as "apr",
+        bop."jul" / nullif(units."jul", 0) + bop."aug" / nullif(units."aug", 0) + bop."sep" / nullif(units."sep", 0) + bop."oct" / nullif(units."oct", 0) + bop."nov" / nullif(units."nov", 0) + bop."dec" / nullif(units."dec", 0) + bop."jan" / nullif(units."jan", 0) + bop."feb" / nullif(units."feb", 0)  + bop."mar" / nullif(units."mar", 0) + bop."apr" / nullif(units."apr", 0) + bop."may" / nullif(units."may", 0) as "may",
+        bop."jul" / nullif(units."jul", 0) + bop."aug" / nullif(units."aug", 0) + bop."sep" / nullif(units."sep", 0) + bop."oct" / nullif(units."oct", 0) + bop."nov" / nullif(units."nov", 0) + bop."dec" / nullif(units."dec", 0) + bop."jan" / nullif(units."jan", 0) + bop."feb" / nullif(units."feb", 0)  + bop."mar" / nullif(units."mar", 0) + bop."apr" / nullif(units."apr", 0) + bop."may" / nullif(units."may", 0) + bop."jun" / nullif(units."jun", 0) as "jun"
+    from 
+        bop_data bop
+    inner join 
+        units_data units on bop."division" = units."division"
+        and bop."group" = units."group"
+        and bop."class" = units."class"
+        and bop."subclass" = units."subclass"
+        and bop."year" = units."year"
+)
+select * from ct_data
+UNION ALL
+select * from metrics
+order by "division", "group", "class", "subclass", "metrics", "year"
