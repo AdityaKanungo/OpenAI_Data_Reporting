@@ -1,77 +1,51 @@
-Slide 1: Title Slide
+WITH bop_data AS (
+SELECT * FROM plcb_edw_data.t_plcb_rpt_206_mtrcs_summ
+WHERE nam_mtrcs = 'SOH_EOP' ),
+ 
+units_data AS (
+SELECT * FROM plcb_edw_data.t_plcb_rpt_206_mtrcs_summ
+WHERE nam_mtrcs = 'UNITS_RECEIPT')
+select * from(
+    SELECT bop.nam_division, bop.nam_group, bop.nam_class, bop.nam_sub_class, bop.nam_dept, bop.cde_edw_cat_loc, bop.nam_year,
+        CAST('CT' AS varchar2(2)) AS nam_mtrcs,
+        bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0) AS mnth_of_jul,
+        bop.mnth_of_aug / NULLIF(units.mnth_of_aug, 0) + bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0) AS mnth_of_aug,
+        bop.mnth_of_sep / NULLIF(units.mnth_of_sep, 0) + bop.mnth_of_aug / NULLIF(units.mnth_of_aug, 0) + bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0) AS mnth_of_sep,
+        bop.mnth_of_oct / NULLIF(units.mnth_of_oct, 0) + bop.mnth_of_sep / NULLIF(units.mnth_of_sep, 0) + bop.mnth_of_aug / NULLIF(units.mnth_of_aug, 0) + bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0) AS mnth_of_oct,
+        bop.mnth_of_nov / NULLIF(units.mnth_of_nov, 0) + bop.mnth_of_oct / NULLIF(units.mnth_of_oct, 0) + bop.mnth_of_sep / NULLIF(units.mnth_of_sep, 0) + bop.mnth_of_aug / NULLIF(units.mnth_of_aug, 0) + bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0) AS mnth_of_nov,
+        bop.mnth_of_dec / NULLIF(units.mnth_of_dec, 0) + bop.mnth_of_nov / NULLIF(units.mnth_of_nov, 0) + bop.mnth_of_oct / NULLIF(units.mnth_of_oct, 0) + bop.mnth_of_sep / NULLIF(units.mnth_of_sep, 0) + bop.mnth_of_aug / NULLIF(units.mnth_of_aug, 0) + bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0) AS mnth_of_dec,
+        bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0) AS mnth_of_jan,
+        bop.mnth_of_feb / NULLIF(units.mnth_of_feb, 0) + bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0) AS mnth_of_feb,
+        bop.mnth_of_mar / NULLIF(units.mnth_of_mar, 0) + bop.mnth_of_feb / NULLIF(units.mnth_of_feb, 0) + bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0) AS mnth_of_mar,
+        --bop.mnth_of_apr / NULLIF(units.mnth_of_apr, 0) + bop.mnth_of_mar / NULLIF(units.mnth_of_mar, 0) + bop.mnth_of_feb / NULLIF(units.mnth_of_feb, 0) + bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0) AS mnth_of_apr,
+        COALESCE (bop.mnth_of_apr/NULLIF(units.mnth_of_apr,0),0) AS mnth_of_apr,
+        bop.mnth_of_may / NULLIF(units.mnth_of_may, 0) + bop.mnth_of_apr / NULLIF(units.mnth_of_apr, 0) + bop.mnth_of_mar / NULLIF(units.mnth_of_mar, 0) + bop.mnth_of_feb / NULLIF(units.mnth_of_feb, 0) + bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0) AS mnth_of_may,
+        bop.mnth_of_jun / NULLIF(units.mnth_of_jun, 0) + bop.mnth_of_may / NULLIF(units.mnth_of_may, 0) + bop.mnth_of_apr / NULLIF(units.mnth_of_apr, 0) + bop.mnth_of_mar / NULLIF(units.mnth_of_mar, 0) + bop.mnth_of_feb / NULLIF(units.mnth_of_feb, 0) + bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0) AS mnth_of_jun,
+        bop.dte_load_edw, bop.dte_update_edw
+    FROM bop_data bop
+    FULL OUTER JOIN units_data units ON bop.nam_division = units.nam_division
+        AND bop.nam_group = units.nam_group
+        AND bop.nam_class = units.nam_class
+        AND bop.nam_sub_class = units.nam_sub_class
+        AND bop.nam_year = units.nam_year 
+        and bop.cde_edw_cat_loc = units.cde_edw_cat_loc
 
-    Title: Leveraging General AI for SQL Query Generation
-    Subtitle: A Revolutionary Approach to Database Interactions
-    Image: A graphic illustrating AI interaction with a database, or your company’s logo.
-    Presented by: [Your Name or Your Company’s Name]
-    Date: [Presentation Date]
-
-Slide 2: Introduction
-
-    Topic: Setting the Stage
-    Content:
-        "In the modern data-driven world, the ability to quickly retrieve and analyze data is crucial."
-        "SQL remains the cornerstone for interacting with relational databases, yet crafting SQL queries can be time-consuming and error-prone."
-        "Our SQL Query Generator harnesses the power of OpenAI's GPT models to translate natural language prompts into accurate SQL queries."
-        "Let's dive into how this tool can optimize your workflow, reduce errors, and make SQL querying more accessible."
-
-Slide 3: System Architecture
-
-    Topic: Understanding the Building Blocks
-    Content:
-        "Our system is structured into four main components:"
-            "User Interface: Built with Streamlit, it provides a user-friendly web interface for inputting prompts and viewing results."
-            "OpenAI API: This is the brain of our operation, interfacing with OpenAI to generate and review SQL queries based on user input."
-            "SQL Execution Engine: Responsible for running the generated SELECT queries against your database and displaying the results."
-            "Visualization Component: Integrated within the UI, it allows for immediate plotting and analysis of query results."
-        "This modular approach ensures a smooth and efficient user experience from start to finish."
-
-Slide 4: From Prompt to SQL Query
-
-    Topic: The Journey of a User Prompt
-    Content:
-        "The process starts when a user uploads their database metadata and inputs a query request in natural language."
-        "Our system sends this input to the OpenAI API, where the GPT model generates a preliminary SQL query."
-        "This query undergoes a review phase to ensure it adheres to SQL standards and optimally utilizes the database's structure."
-        "The finalized query is then presented back to the user, ready for execution or further modification."
-
-Slide 5: SQL Execution and Visualization
-
-    Topic: Bringing Queries to Life
-    Content:
-        "With the generated query in hand, users can execute it directly within our tool if it’s a SELECT statement."
-        "The results are displayed in a clear, tabular format, and users have the option to download the results for offline analysis."
-        "For analytical queries, users can leverage our visualization component to instantly generate plots and charts, aiding in data interpretation and insights."
-
-Slide 6: Advantages and Use Cases
-
-    Topic: Why Choose Our SQL Query Generator?
-    Content:
-        "Our tool dramatically reduces the time and effort required to create SQL queries, especially for users who may not be SQL experts."
-        "It enhances accuracy and consistency in query generation, minimizing the risk of errors."
-        "Practical applications span various domains, including business analytics, academic research, and data science education."
-        "By streamlining the SQL querying process, we empower users to focus more on data analysis and less on query syntax."
-
-Slide 7: Challenges and Future Directions
-
-    Topic: Navigating the Road Ahead
-    Content:
-        "While our tool is powerful, it's important to acknowledge its limitations, especially when dealing with highly complex queries or specific database dialects."
-        "Our ongoing development efforts are geared towards enhancing the tool’s capabilities, supporting a wider array of database systems, and continually improving user experience."
-        "We are also exploring ways to integrate additional AI-driven features, such as query optimization suggestions and natural language explanations of SQL queries."
-
-Slide 8: Q&A Session
-
-    Topic: Engaging with the Audience
-    Content:
-        "Thank you for taking the time to learn about our SQL Query Generator!"
-        "We are eager to hear your thoughts and answer any questions you might have."
-        "Your feedback is invaluable as we continue to refine and expand the capabilities of our tool."
-
-Slide 9: Contact and Thank You
-
-    Topic: Wrapping Up and Staying Connected
-    Content:
-        "It's been a pleasure sharing our work with you today!"
-        "For further inquiries, collaboration opportunities, or feedback, please don’t hesitate to reach out to us at [Your Contact Information]."
-        "Thank you once again, and we look forward to staying connected!"
+UNION 
+Select *
+--    NAM_YEAR,
+--    NAM_DIVISION,
+--    NAM_GROUP,
+--    NAM_CLASS,
+--    NAM_SUB_CLASS,
+--    NAM_DEPT,
+--    CDE_EDW_CAT_LOC,
+--    NAM_MTRCS,
+--    MNTH_OF_JUL,
+--    MNTH_OF_AUG
+    from
+plcb_edw_data.t_plcb_rpt_206_mtrcs_summ
+)
+where NAM_DIVISION IN('Stock Wine','NonStock Spirits','Stock Spirits','NonStock Wine')
+AND NAM_MTRCS IN ('CT')
+AND MNTH_OF_APR IS NOT NULL
+--and ((rownum <100 and '"&SmallorAll&"' = 'S') or ('"&SmallorAll&"' = 'A' and 1=1))
