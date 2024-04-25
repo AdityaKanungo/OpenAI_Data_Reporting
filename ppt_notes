@@ -1,26 +1,33 @@
 WITH bop_data AS (
-SELECT * FROM plcb_edw_data.t_plcb_rpt_206_mtrcs_summ
-WHERE nam_mtrcs = 'SOH_EOP' ),
- 
+    SELECT * FROM plcb_edw_data.t_plcb_rpt_206_mtrcs_summ
+    WHERE nam_mtrcs = 'SOH_EOP'
+),
 units_data AS (
-SELECT * FROM plcb_edw_data.t_plcb_rpt_206_mtrcs_summ
-WHERE nam_mtrcs = 'UNITS_RECEIPT')
-select * from(
-    SELECT bop.nam_division, bop.nam_group, bop.nam_class, bop.nam_sub_class, bop.nam_dept, bop.cde_edw_cat_loc, bop.nam_year,
-        CAST('CT' AS varchar2(2)) AS nam_mtrcs,
-        bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0) AS mnth_of_jul,
-        bop.mnth_of_aug / NULLIF(units.mnth_of_aug, 0) + bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0) AS mnth_of_aug,
-        bop.mnth_of_sep / NULLIF(units.mnth_of_sep, 0) + bop.mnth_of_aug / NULLIF(units.mnth_of_aug, 0) + bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0) AS mnth_of_sep,
-        bop.mnth_of_oct / NULLIF(units.mnth_of_oct, 0) + bop.mnth_of_sep / NULLIF(units.mnth_of_sep, 0) + bop.mnth_of_aug / NULLIF(units.mnth_of_aug, 0) + bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0) AS mnth_of_oct,
-        bop.mnth_of_nov / NULLIF(units.mnth_of_nov, 0) + bop.mnth_of_oct / NULLIF(units.mnth_of_oct, 0) + bop.mnth_of_sep / NULLIF(units.mnth_of_sep, 0) + bop.mnth_of_aug / NULLIF(units.mnth_of_aug, 0) + bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0) AS mnth_of_nov,
-        bop.mnth_of_dec / NULLIF(units.mnth_of_dec, 0) + bop.mnth_of_nov / NULLIF(units.mnth_of_nov, 0) + bop.mnth_of_oct / NULLIF(units.mnth_of_oct, 0) + bop.mnth_of_sep / NULLIF(units.mnth_of_sep, 0) + bop.mnth_of_aug / NULLIF(units.mnth_of_aug, 0) + bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0) AS mnth_of_dec,
-        bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0) AS mnth_of_jan,
-        bop.mnth_of_feb / NULLIF(units.mnth_of_feb, 0) + bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0) AS mnth_of_feb,
-        bop.mnth_of_mar / NULLIF(units.mnth_of_mar, 0) + bop.mnth_of_feb / NULLIF(units.mnth_of_feb, 0) + bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0) AS mnth_of_mar,
-        --bop.mnth_of_apr / NULLIF(units.mnth_of_apr, 0) + bop.mnth_of_mar / NULLIF(units.mnth_of_mar, 0) + bop.mnth_of_feb / NULLIF(units.mnth_of_feb, 0) + bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0) AS mnth_of_apr,
-        COALESCE (bop.mnth_of_apr/NULLIF(units.mnth_of_apr,0),0) AS mnth_of_apr,
-        bop.mnth_of_may / NULLIF(units.mnth_of_may, 0) + bop.mnth_of_apr / NULLIF(units.mnth_of_apr, 0) + bop.mnth_of_mar / NULLIF(units.mnth_of_mar, 0) + bop.mnth_of_feb / NULLIF(units.mnth_of_feb, 0) + bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0) AS mnth_of_may,
-        bop.mnth_of_jun / NULLIF(units.mnth_of_jun, 0) + bop.mnth_of_may / NULLIF(units.mnth_of_may, 0) + bop.mnth_of_apr / NULLIF(units.mnth_of_apr, 0) + bop.mnth_of_mar / NULLIF(units.mnth_of_mar, 0) + bop.mnth_of_feb / NULLIF(units.mnth_of_feb, 0) + bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0) AS mnth_of_jun,
+    SELECT * FROM plcb_edw_data.t_plcb_rpt_206_mtrcs_summ
+    WHERE nam_mtrcs = 'UNITS_RECEIPT'
+)
+SELECT * FROM (
+    SELECT
+        bop.nam_division,
+        bop.nam_group,
+        bop.nam_class,
+        bop.nam_sub_class,
+        bop.nam_dept,
+        bop.cde_edw_cat_loc,
+        bop.nam_year,
+        CAST('CT' AS VARCHAR2(2)) AS nam_mtrcs,
+        COALESCE(bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0), 0) AS mnth_of_jul,
+        COALESCE(bop.mnth_of_aug / NULLIF(units.mnth_of_aug, 0), 0) + COALESCE(bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0), 0) AS mnth_of_aug,
+        COALESCE(bop.mnth_of_sep / NULLIF(units.mnth_of_sep, 0), 0) + COALESCE(bop.mnth_of_aug / NULLIF(units.mnth_of_aug, 0), 0) + COALESCE(bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0), 0) AS mnth_of_sep,
+        COALESCE(bop.mnth_of_oct / NULLIF(units.mnth_of_oct, 0), 0) + COALESCE(bop.mnth_of_sep / NULLIF(units.mnth_of_sep, 0), 0) + COALESCE(bop.mnth_of_aug / NULLIF(units.mnth_of_aug, 0), 0) + COALESCE(bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0), 0) AS mnth_of_oct,
+        COALESCE(bop.mnth_of_nov / NULLIF(units.mnth_of_nov, 0), 0) + COALESCE(bop.mnth_of_oct / NULLIF(units.mnth_of_oct, 0), 0) + COALESCE(bop.mnth_of_sep / NULLIF(units.mnth_of_sep, 0), 0) + COALESCE(bop.mnth_of_aug / NULLIF(units.mnth_of_aug, 0), 0) + COALESCE(bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0), 0) AS mnth_of_nov,
+        COALESCE(bop.mnth_of_dec / NULLIF(units.mnth_of_dec, 0), 0) + COALESCE(bop.mnth_of_nov / NULLIF(units.mnth_of_nov, 0), 0) + COALESCE(bop.mnth_of_oct / NULLIF(units.mnth_of_oct, 0), 0) + COALESCE(bop.mnth_of_sep / NULLIF(units.mnth_of_sep, 0), 0) + COALESCE(bop.mnth_of_aug / NULLIF(units.mnth_of_aug, 0), 0) + COALESCE(bop.mnth_of_jul / NULLIF(units.mnth_of_jul, 0), 0) AS mnth_of_dec,
+        COALESCE(bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0), 0) AS mnth_of_jan,
+        COALESCE(bop.mnth_of_feb / NULLIF(units.mnth_of_feb, 0), 0) + COALESCE(bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0), 0) AS mnth_of_feb,
+        COALESCE(bop.mnth_of_mar / NULLIF(units.mnth_of_mar, 0), 0) + COALESCE(bop.mnth_of_feb / NULLIF(units.mnth_of_feb, 0), 0) + COALESCE(bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0), 0) AS mnth_of_mar,
+        COALESCE(bop.mnth_of_apr / NULLIF(units.mnth_of_apr, 0), 0) + COALESCE(bop.mnth_of_mar / NULLIF(units.mnth_of_mar, 0), 0) + COALESCE(bop.mnth_of_feb / NULLIF(units.mnth_of_feb, 0), 0) + COALESCE(bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0), 0) AS mnth_of_apr,
+        COALESCE(bop.mnth_of_may / NULLIF(units.mnth_of_may, 0), 0) + COALESCE(bop.mnth_of_apr / NULLIF(units.mnth_of_apr, 0), 0) + COALESCE(bop.mnth_of_mar / NULLIF(units.mnth_of_mar, 0), 0) + COALESCE(bop.mnth_of_feb / NULLIF(units.mnth_of_feb, 0), 0) + COALESCE(bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0), 0) AS mnth_of_may,
+        COALESCE(bop.mnth_of_jun / NULLIF(units.mnth_of_jun, 0), 0) + COALESCE(bop.mnth_of_may / NULLIF(units.mnth_of_may, 0), 0) + COALESCE(bop.mnth_of_apr / NULLIF(units.mnth_of_apr, 0), 0) + COALESCE(bop.mnth_of_mar / NULLIF(units.mnth_of_mar, 0), 0) + COALESCE(bop.mnth_of_feb / NULLIF(units.mnth_of_feb, 0), 0) + COALESCE(bop.mnth_of_jan / NULLIF(units.mnth_of_jan, 0), 0) AS mnth_of_jun,
         bop.dte_load_edw, bop.dte_update_edw
     FROM bop_data bop
     FULL OUTER JOIN units_data units ON bop.nam_division = units.nam_division
@@ -28,24 +35,12 @@ select * from(
         AND bop.nam_class = units.nam_class
         AND bop.nam_sub_class = units.nam_sub_class
         AND bop.nam_year = units.nam_year 
-        and bop.cde_edw_cat_loc = units.cde_edw_cat_loc
+        AND bop.cde_edw_cat_loc = units.cde_edw_cat_loc
 
 UNION 
-Select *
---    NAM_YEAR,
---    NAM_DIVISION,
---    NAM_GROUP,
---    NAM_CLASS,
---    NAM_SUB_CLASS,
---    NAM_DEPT,
---    CDE_EDW_CAT_LOC,
---    NAM_MTRCS,
---    MNTH_OF_JUL,
---    MNTH_OF_AUG
-    from
-plcb_edw_data.t_plcb_rpt_206_mtrcs_summ
-)
-where NAM_DIVISION IN('Stock Wine','NonStock Spirits','Stock Spirits','NonStock Wine')
+SELECT *
+    FROM plcb_edw_data.t_plcb_rpt_206_mtrcs_summ
+) 
+WHERE NAM_DIVISION IN('Stock Wine', 'NonStock Spirits', 'Stock Spirits', 'NonStock Wine')
 AND NAM_MTRCS IN ('CT')
 AND MNTH_OF_APR IS NOT NULL
---and ((rownum <100 and '"&SmallorAll&"' = 'S') or ('"&SmallorAll&"' = 'A' and 1=1))
