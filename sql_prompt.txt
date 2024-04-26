@@ -1,35 +1,49 @@
-Guidelines for Generating SQL Queries:
+WITH bop_data AS (
+    SELECT * FROM plcb_edw_data.t_plcb_rpt_206_mtrcs_summ
+    WHERE nam_mtrcs = 'SOH_EOP'
+),
 
-1. Strict Adherence to Metadata:
+units_data AS (
+    SELECT * FROM plcb_edw_data.t_plcb_rpt_206_mtrcs_summ
+    WHERE nam_mtrcs = 'UNITS_RECEIPT'
+),
 
-    Only use tables and columns listed in the provided metadata, avoiding assumptions or expansions upon the database schema.
+sales_data AS (
+    SELECT * FROM plcb_edw_data.t_plcb_rpt_206_mtrcs_summ
+    WHERE nam_mtrcs = 'QTY_SALE'
+)
 
-2. Clear Interpretation and Error Handling:
+SELECT * FROM (
+    SELECT
+        bop.nam_division,
+        bop.nam_group,
+        bop.nam_class,
+        bop.nam_sub_class,
+        bop.nam_dept,
+        bop.cde_edw_cat_loc,
+        bop.nam_year,
+        CAST('CT' AS VARCHAR2(2)) AS nam_mtrcs,
+        COALESCE(sales.mnth_of_jul / NULLIF((COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0)), 0), 0) AS mnth_of_jul,
+        COALESCE(sales.mnth_of_aug / NULLIF((COALESCE(units.mnth_of_aug, 0) + COALESCE(bop.mnth_of_aug, 0)), 0), 0) + COALESCE(sales.mnth_of_jul / NULLIF((COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0)), 0), 0) AS mnth_of_aug,
+        COALESCE(sales.mnth_of_sep / NULLIF((COALESCE(units.mnth_of_sep, 0) + COALESCE(bop.mnth_of_sep, 0)), 0), 0) + COALESCE(sales.mnth_of_aug / NULLIF((COALESCE(units.mnth_of_aug, 0) + COALESCE(bop.mnth_of_aug, 0)), 0), 0) + COALESCE(sales.mnth_of_jul / NULLIF((COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0)), 0), 0) AS mnth_of_sep,
+        COALESCE(sales.mnth_of_oct / NULLIF((COALESCE(units.mnth_of_oct, 0) + COALESCE(bop.mnth_of_oct, 0)), 0), 0) + COALESCE(sales.mnth_of_sep / NULLIF((COALESCE(units.mnth_of_sep, 0) + COALESCE(bop.mnth_of_sep, 0)), 0), 0) + COALESCE(sales.mnth_of_aug / NULLIF((COALESCE(units.mnth_of_aug, 0) + COALESCE(bop.mnth_of_aug, 0)), 0), 0) + COALESCE(sales.mnth_of_jul / NULLIF((COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0)), 0), 0) AS mnth_of_oct,
+        COALESCE(sales.mnth_of_nov / NULLIF((COALESCE(units.mnth_of_nov, 0) + COALESCE(bop.mnth_of_nov, 0)), 0), 0) + COALESCE(sales.mnth_of_oct / NULLIF((COALESCE(units.mnth_of_oct, 0) + COALESCE(bop.mnth_of_oct, 0)), 0), 0) + COALESCE(sales.mnth_of_sep / NULLIF((COALESCE(units.mnth_of_sep, 0) + COALESCE(bop.mnth_of_sep, 0)), 0), 0) + COALESCE(sales.mnth_of_aug / NULLIF((COALESCE(units.mnth_of_aug, 0) + COALESCE(bop.mnth_of_aug, 0)), 0), 0) + COALESCE(sales.mnth_of_jul / NULLIF((COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0)), 0), 0) AS mnth_of_nov,
+        COALESCE(sales.mnth_of_dec / NULLIF((COALESCE(units.mnth_of_dec, 0) + COALESCE(bop.mnth_of_dec, 0)), 0), 0) + COALESCE(sales.mnth_of_nov / NULLIF((COALESCE(units.mnth_of_nov, 0) + COALESCE(bop.mnth_of_nov, 0)), 0), 0) + COALESCE(sales.mnth_of_oct / NULLIF((COALESCE(units.mnth_of_oct, 0) + COALESCE(bop.mnth_of_oct, 0)), 0), 0) + COALESCE(sales.mnth_of_sep / NULLIF((COALESCE(units.mnth_of_sep, 0) + COALESCE(bop.mnth_of_sep, 0)), 0), 0) + COALESCE(sales.mnth_of_aug / NULLIF((COALESCE(units.mnth_of_aug, 0) + COALESCE(bop.mnth_of_aug, 0)), 0), 0) + COALESCE(sales.mnth_of_jul / NULLIF((COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0)), 0), 0) AS mnth_of_dec,
+        COALESCE(sales.mnth_of_jan / NULLIF((COALESCE(units.mnth_of_jan, 0) + COALESCE(bop.mnth_of_jan, 0)), 0), 0) AS mnth_of_jan,
+        COALESCE(sales.mnth_of_feb / NULLIF((COALESCE(units.mnth_of_feb, 0) + COALESCE(bop.mnth_of_feb, 0)), 0), 0) + COALESCE(sales.mnth_of_jan / NULLIF((COALESCE(units.mnth_of_jan, 0) + COALESCE(bop.mnth_of_jan, 0)), 0), 0) AS mnth_of_feb,
+        COALESCE(sales.mnth_of_mar / NULLIF((COALESCE(units.mnth_of_mar, 0) + COALESCE(bop.mnth_of_mar, 0)), 0), 0) + COALESCE(sales.mnth_of_feb / NULLIF((COALESCE(units.mnth_of_feb, 0) + COALESCE(bop.mnth_of_feb, 0)), 0), 0) + COALESCE(sales.mnth_of_jan / NULLIF((COALESCE(units.mnth_of_jan, 0) + COALESCE(bop.mnth_of_jan, 0)), 0), 0) AS mnth_of_mar,
+        COALESCE(sales.mnth_of_apr / NULLIF((COALESCE(units.mnth_of_apr, 0) + COALESCE(bop.mnth_of_apr, 0)), 0), 0) + COALESCE(sales.mnth_of_mar / NULLIF((COALESCE(units.mnth_of_mar, 0) + COALESCE(bop.mnth_of_mar, 0)), 0), 0) + COALESCE(sales.mnth_of_feb / NULLIF((COALESCE(units.mnth_of_feb, 0) + COALESCE(bop.mnth_of_feb, 0)), 0), 0) + COALESCE(sales.mnth_of_jan / NULLIF((COALESCE(units.mnth_of_jan, 0) + COALESCE(bop.mnth_of_jan, 0)), 0), 0) AS mnth_of_apr,
+        COALESCE(sales.mnth_of_may / NULLIF((COALESCE(units.mnth_of_may, 0) + COALESCE(bop.mnth_of_may, 0)), 0), 0) + COALESCE(sales.mnth_of_apr / NULLIF((COALESCE(units.mnth_of_apr, 0) + COALESCE(bop.mnth_of_apr, 0)), 0), 0) + COALESCE(sales.mnth_of_mar / NULLIF((COALESCE(units.mnth_of_mar, 0) + COALESCE(bop.mnth_of_mar, 0)), 0), 0) + COALESCE(sales.mnth_of_feb / NULLIF((COALESCE(units.mnth_of_feb, 0) + COALESCE(bop.mnth_of_feb, 0)), 0), 0) + COALESCE(sales.mnth_of_jan / NULLIF((COALESCE(units.mnth_of_jan, 0) + COALESCE(bop.mnth_of_jan, 0)), 0), 0) AS mnth_of_may,
+        COALESCE(sales.mnth_of_jun / NULLIF((COALESCE(units.mnth_of_jun, 0) + COALESCE(bop.mnth_of_jun, 0)), 0), 0) + COALESCE(sales.mnth_of_may / NULLIF((COALESCE(units.mnth_of_may, 0) + COALESCE(bop.mnth_of_may, 0)), 0), 0) + COALESCE(sales.mnth_of_apr / NULLIF((COALESCE(units.mnth_of_apr, 0) + COALESCE(bop.mnth_of_apr, 0)), 0), 0) + COALESCE(sales.mnth_of_mar / NULLIF((COALESCE(units.mnth_of_mar, 0) + COALESCE(bop.mnth_of_mar, 0)), 0), 0) + COALESCE(sales.mnth_of_feb / NULLIF((COALESCE(units.mnth_of_feb, 0) + COALESCE(bop.mnth_of_feb, 0)), 0), 0) + COALESCE(sales.mnth_of_jan / NULLIF((COALESCE(units.mnth_of_jan, 0) + COALESCE(bop.mnth_of_jan, 0)), 0), 0) AS mnth_of_jun,
+        bop.dte_load_edw,
+        bop.dte_update_edw
+    FROM bop_data bop
+    JOIN units_data units ON bop.nam_division = units.nam_division AND bop.nam_group = units.nam_group AND bop.nam_class = units.nam_class AND bop.nam_sub_class = units.nam_sub_class AND bop.nam_year = units.nam_year AND bop.cde_edw_cat_loc = units.cde_edw_cat_loc
+    JOIN sales_data sales ON bop.nam_division = sales.nam_division AND bop.nam_group = sales.nam_group AND bop.nam_class = sales.nam_class AND bop.nam_sub_class = sales.nam_sub_class AND bop.nam_year = sales.nam_year AND bop.cde_edw_cat_loc = sales.cde_edw_cat_loc
+)
 
-    Address ambiguous prompts based on metadata and prioritize metadata constraints, providing clear messages for discrepancies.
-
-3. Maintain SQL Standards and Readability:
-
-    Adhere to SQL best practices, ensuring readability with consistent syntax, formatting, and explicit JOIN conditions.
-
-4. Optimization and Efficient Data Retrieval:
-
-    Optimize queries for performance, using indexed columns and efficient filtering, while avoiding unnecessary data retrieval and complex nested queries.
-
-Guidelines for Reviewing SQL Queries:
-
-1. Validation of Tables and Columns:
-
-    Ensure all tables and columns used are listed in the provided metadata, with no external assumptions.
-
-2. Adherence to SQL Standards and Performance:
-
-    Confirm the query’s optimization for performance and adherence to SQL standards.
-
-3. Accuracy and Clarity:
-
-    Validate the accuracy of the query in representing the user’s request and ensure clarity in table relationships and data retrieval.
-
-4. Feedback and Improvement:
-
-    Provide transparent feedback on any limitations, and offer improved versions of the query when necessary, enhancing clarity and adherence to best practices.
+UNION 
+Select *
+    from
+plcb_edw_data.t_plcb_rpt_206_mtrcs_summ
+WHERE NAM_DIVISION IN ('Stock Wine', 'NonStock Spirits', 'Stock Spirits', 'NonStock Wine')
