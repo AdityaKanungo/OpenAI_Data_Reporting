@@ -1,24 +1,21 @@
 FWGS_Sales_$LY_test =
 VAR SelectedYear = SELECTEDVALUE(T_PLCB_CAL_DIM[NBR_YEAR_454])
-VAR SelectedWeekRange = VALUES(T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454])
+VAR SelectedWeek = SELECTEDVALUE(T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454])
 RETURN
     IF(
         NOT HASONEVALUE(T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454]),
-        SUMX(
-            VALUES(T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454]),
-            CALCULATE(
-                SUM(T_PLCB_INV_SALES_WKLY_FACT[AMT_SALE]),
-                T_PLCB_LOC_DIM[CDE_EDW_CAT_LOC] = "FWGS",
-                T_PLCB_INV_SALES_WKLY_FACT[RS] = 1,
-                T_PLCB_CAL_DIM[NBR_YEAR_454] = SelectedYear - 1,
-                T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454] IN SelectedWeekRange
-            )
+        CALCULATE(
+            SUM(T_PLCB_INV_SALES_WKLY_FACT[AMT_SALE]),
+            T_PLCB_LOC_DIM[CDE_EDW_CAT_LOC] = "FWGS",
+            T_PLCB_INV_SALES_WKLY_FACT[RS] = 1,
+            T_PLCB_CAL_DIM[NBR_YEAR_454] = SelectedYear - 1,
+            T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454] IN VALUES(T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454])
         ),
         CALCULATE(
             SUM(T_PLCB_INV_SALES_WKLY_FACT[AMT_SALE]),
             T_PLCB_LOC_DIM[CDE_EDW_CAT_LOC] = "FWGS",
             T_PLCB_INV_SALES_WKLY_FACT[RS] = 1,
             T_PLCB_CAL_DIM[NBR_YEAR_454] = SelectedYear - 1,
-            T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454] = SELECTEDVALUE(T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454])
+            T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454] = SelectedWeek
         )
     )
