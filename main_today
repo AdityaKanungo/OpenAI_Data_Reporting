@@ -1,82 +1,24 @@
-WITH bop_data AS (
-    SELECT * FROM plcb_edw_data.t_plcb_rpt_206_mtrcs_summ
-    WHERE nam_mtrcs = 'SOH_EOP'
-),
-
-units_data AS (
-    SELECT * FROM plcb_edw_data.t_plcb_rpt_206_mtrcs_summ
-    WHERE nam_mtrcs = 'UNITS_RECEIPT'
-),
-
-sales_data AS (
-    SELECT * FROM plcb_edw_data.t_plcb_rpt_206_mtrcs_summ
-    WHERE nam_mtrcs = 'QTY_SALE'
-)
-
-SELECT * FROM (
-    SELECT
-        bop.nam_division,
-        bop.nam_group,
-        bop.nam_class,
-        bop.nam_sub_class,
-        bop.nam_dept,
-        bop.cde_edw_cat_loc,
-        bop.nam_year,
-        CAST('CT' AS VARCHAR2(2)) AS nam_mtrcs,
-        COALESCE(bop.mnth_of_jul / NULLIF(COALESCE(units.mnth_of_jul, 0) + COALESCE(sales.mnth_of_jul, 0), 0), 0) AS mnth_of_jul,
-        COALESCE(bop.mnth_of_aug / NULLIF(COALESCE(units.mnth_of_aug, 0) + COALESCE(sales.mnth_of_aug, 0), 0), 0) + COALESCE(bop.mnth_of_jul / NULLIF(COALESCE(units.mnth_of_jul, 0) + COALESCE(sales.mnth_of_jul, 0), 0), 0) AS mnth_of_aug,
-        COALESCE(bop.mnth_of_sep / NULLIF(COALESCE(units.mnth_of_sep, 0) + COALESCE(sales.mnth_of_sep, 0), 0), 0) + COALESCE(bop.mnth_of_aug / NULLIF(COALESCE(units.mnth_of_aug, 0) + COALESCE(sales.mnth_of_aug, 0), 0), 0) + COALESCE(bop.mnth_of_jul / NULLIF(COALESCE(units.mnth_of_jul, 0) + COALESCE(sales.mnth_of_jul, 0), 0), 0) AS mnth_of_sep,
-        COALESCE(bop.mnth_of_oct / NULLIF(COALESCE(units.mnth_of_oct, 0) + COALESCE(sales.mnth_of_oct, 0), 0), 0) + COALESCE(bop.mnth_of_sep / NULLIF(COALESCE(units.mnth_of_sep, 0) + COALESCE(sales.mnth_of_sep, 0), 0), 0) + COALESCE(bop.mnth_of_aug / NULLIF(COALESCE(units.mnth_of_aug, 0) + COALESCE(sales.mnth_of_aug, 0), 0), 0) + COALESCE(bop.mnth_of_jul / NULLIF(COALESCE(units.mnth_of_jul, 0) + COALESCE(sales.mnth_of_jul, 0), 0), 0) AS mnth_of_oct,
-        COALESCE(bop.mnth_of_nov / NULLIF(COALESCE(units.mnth_of_nov, 0) + COALESCE(sales.mnth_of_nov, 0), 0), 0) + COALESCE(bop.mnth_of_oct / NULLIF(COALESCE(units.mnth_of_oct, 0) + COALESCE(sales.mnth_of_oct, 0), 0), 0) + COALESCE(bop.mnth_of_sep / NULLIF(COALESCE(units.mnth_of_sep, 0) + COALESCE(sales.mnth_of_sep, 0), 0), 0) + COALESCE(bop.mnth_of_aug / NULLIF(COALESCE(units.mnth_of_aug, 0) + COALESCE(sales.mnth_of_aug, 0), 0), 0) + COALESCE(bop.mnth_of_jul / NULLIF(COALESCE(units.mnth_of_jul, 0) + COALESCE(sales.mnth_of_jul, 0), 0), 0) AS mnth_of_nov,
-        COALESCE(bop.mnth_of_dec / NULLIF(COALESCE(units.mnth_of_dec, 0) + COALESCE(sales.mnth_of_dec, 0), 0), 0) + COALESCE(bop.mnth_of_nov / NULLIF(COALESCE(units.mnth_of_nov, 0) + COALESCE(sales.mnth_of_nov, 0), 0), 0) + COALESCE(bop.mnth_of_oct / NULLIF(COALESCE(units.mnth_of_oct, 0) + COALESCE(sales.mnth_of_oct, 0), 0), 0) + COALESCE(bop.mnth_of_sep / NULLIF(COALESCE(units.mnth_of_sep, 0) + COALESCE(sales.mnth_of_sep, 0), 0), 0) + COALESCE(bop.mnth_of_aug / NULLIF(COALESCE(units.mnth_of_aug, 0) + COALESCE(sales.mnth_of_aug, 0), 0), 0) + COALESCE(bop.mnth_of_jul / NULLIF(COALESCE(units.mnth_of_jul, 0) + COALESCE(sales.mnth_of_jul, 0), 0), 0) AS mnth_of_dec,
-        COALESCE(bop.mnth_of_jan / NULLIF(COALESCE(units.mnth_of_jan, 0) + COALESCE(sales.mnth_of_jan, 0), 0), 0) AS mnth_of_jan,
-        COALESCE(bop.mnth_of_feb / NULLIF(COALESCE(units.mnth_of_feb, 0) + COALESCE(sales.mnth_of_feb, 0), 0), 0) + COALESCE(bop.mnth_of_jan / NULLIF(COALESCE(units.mnth_of_jan, 0) + COALESCE(sales.mnth_of_jan, 0), 0), 0) AS mnth_of_feb,
-        COALESCE(bop.mnth_of_mar / NULLIF(COALESCE(units.mnth_of_mar, 0) + COALESCE(sales.mnth_of_mar, 0), 0), 0) + COALESCE(bop.mnth_of_feb / NULLIF(COALESCE(units.mnth_of_feb, 0) + COALESCE(sales.mnth_of_feb, 0), 0), 0) + COALESCE(bop.mnth_of_jan / NULLIF(COALESCE(units.mnth_of_jan, 0) + COALESCE(sales.mnth_of_jan, 0), 0), 0) AS mnth_of_mar,
-        COALESCE(bop.mnth_of_apr / NULLIF(COALESCE(units.mnth_of_apr, 0) + COALESCE(sales.mnth_of_apr, 0), 0), 0) + COALESCE(bop.mnth_of_mar / NULLIF(COALESCE(units.mnth_of_mar, 0) + COALESCE(sales.mnth_of_mar, 0), 0), 0) + COALESCE(bop.mnth_of_feb / NULLIF(COALESCE(units.mnth_of_feb, 0) + COALESCE(sales.mnth_of_feb, 0), 0), 0) + COALESCE(bop.mnth_of_jan / NULLIF(COALESCE(units.mnth_of_jan, 0) + COALESCE(sales.mnth_of_jan, 0), 0), 0) AS mnth_of_apr,
-        COALESCE(bop.mnth_of_may / NULLIF(COALESCE(units.mnth_of_may, 0) + COALESCE(sales.mnth_of_may, 0), 0), 0) + COALESCE(bop.mnth_of_apr / NULLIF(COALESCE(units.mnth_of_apr, 0) + COALESCE(sales.mnth_of_apr, 0), 0), 0) + COALESCE(bop.mnth_of_mar / NULLIF(COALESCE(units.mnth_of_mar, 0) + COALESCE(sales.mnth_of_mar, 0), 0), 0) + COALESCE(bop.mnth_of_feb / NULLIF(COALESCE(units.mnth_of_feb, 0) + COALESCE(sales.mnth_of_feb, 0), 0), 0) + COALESCE(bop.mnth_of_jan / NULLIF(COALESCE(units.mnth_of_jan, 0) + COALESCE(sales.mnth_of_jan, 0), 0), 0) AS mnth_of_may,
-        COALESCE(bop.mnth_of_jun / NULLIF(COALESCE(units.mnth_of_jun, 0) + COALESCE(sales.mnth_of_jun, 0), 0), 0) + COALESCE(bop.mnth_of_may / NULLIF(COALESCE(units.mnth_of_may, 0) + COALESCE(sales.mnth_of_may, 0), 0), 0) + COALESCE(bop.mnth_of_apr / NULLIF(COALESCE(units.mnth_of_apr, 0) + COALESCE(sales.mnth_of_apr, 0), 0), 0) + COALESCE(bop.mnth_of_mar / NULLIF(COALESCE(units.mnth_of_mar, 0) + COALESCE(sales.mnth_of_mar, 0), 0), 0) + COALESCE(bop.mnth_of_feb / NULLIF(COALESCE(units.mnth_of_feb, 0) + COALESCE(sales.mnth_of_feb, 0), 0), 0) + COALESCE(bop.mnth_of_jan / NULLIF(COALESCE(units.mnth_of_jan, 0) + COALESCE(sales.mnth_of_jan, 0), 0), 0) AS mnth_of_jun,
-        bop.dte_load_edw,
-        bop.dte_update_edw
-    FROM bop_data bop
-    JOIN units_data units ON bop.nam_division = units.nam_division AND bop.nam_group = units.nam_group AND bop.nam_class = units.nam_class AND bop.nam_sub_class = units.nam_sub_class AND bop.nam_year = units.nam_year AND bop.cde_edw_cat_loc = units.cde_edw_cat_loc
-    JOIN sales_data sales ON bop.nam_division = sales.nam_division AND bop.nam_group = sales.nam_group AND bop.nam_class = sales.nam_class AND bop.nam_sub_class = sales.nam_sub_class AND bop.nam_year = sales.nam_year AND bop.cde_edw_cat_loc = sales.cde_edw_cat_loc
-)
-WHERE NAM_DIVISION IN ('Stock Wine', 'NonStock Spirits', 'Stock Spirits', 'NonStock Wine')
-AND NAM_MTRCS IN ('CT')
-AND MNTH_OF_APR IS NOT NULL
-
-
-
-
-
-
-
-    COALESCE(sales.mnth_of_jul / NULLIF(COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0), 0), 0) AS mnth_of_jul,
-    COALESCE(sales.mnth_of_aug / NULLIF(COALESCE(units.mnth_of_aug, 0) + COALESCE(bop.mnth_of_aug, 0), 0), 0) + COALESCE(sales.mnth_of_jul / NULLIF(COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0), 0), 0) AS mnth_of_aug,
-    COALESCE(sales.mnth_of_sep / NULLIF(COALESCE(units.mnth_of_sep, 0) + COALESCE(bop.mnth_of_sep, 0), 0), 0) + COALESCE(sales.mnth_of_aug / NULLIF(COALESCE(units.mnth_of_aug, 0) + COALESCE(bop.mnth_of_aug, 0), 0), 0) + COALESCE(sales.mnth_of_jul / NULLIF(COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0), 0), 0) AS mnth_of_sep,
-    COALESCE(sales.mnth_of_oct / NULLIF(COALESCE(units.mnth_of_oct, 0) + COALESCE(bop.mnth_of_oct, 0), 0), 0) + COALESCE(sales.mnth_of_sep / NULLIF(COALESCE(units.mnth_of_sep, 0) + COALESCE(bop.mnth_of_sep, 0), 0), 0) + COALESCE(sales.mnth_of_aug / NULLIF(COALESCE(units.mnth_of_aug, 0) + COALESCE(bop.mnth_of_aug, 0), 0), 0) + COALESCE(sales.mnth_of_jul / NULLIF(COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0), 0), 0) AS mnth_of_oct,
-    COALESCE(sales.mnth_of_nov / NULLIF(COALESCE(units.mnth_of_nov, 0) + COALESCE(bop.mnth_of_nov, 0), 0), 0) + COALESCE(sales.mnth_of_oct / NULLIF(COALESCE(units.mnth_of_oct, 0) + COALESCE(bop.mnth_of_oct, 0), 0), 0) + COALESCE(sales.mnth_of_sep / NULLIF(COALESCE(units.mnth_of_sep, 0) + COALESCE(bop.mnth_of_sep, 0), 0), 0) + COALESCE(sales.mnth_of_aug / NULLIF(COALESCE(units.mnth_of_aug, 0) + COALESCE(bop.mnth_of_aug, 0), 0), 0) + COALESCE(sales.mnth_of_jul / NULLIF(COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0), 0), 0) AS mnth_of_nov,
-    COALESCE(sales.mnth_of_dec / NULLIF(COALESCE(units.mnth_of_dec, 0) + COALESCE(bop.mnth_of_dec, 0), 0), 0) + COALESCE(sales.mnth_of_nov / NULLIF(COALESCE(units.mnth_of_nov, 0) + COALESCE(bop.mnth_of_nov, 0), 0), 0) + COALESCE(sales.mnth_of_oct / NULLIF(COALESCE(units.mnth_of_oct, 0) + COALESCE(bop.mnth_of_oct, 0), 0), 0) + COALESCE(sales.mnth_of_sep / NULLIF(COALESCE(units.mnth_of_sep, 0) + COALESCE(bop.mnth_of_sep, 0), 0), 0) + COALESCE(sales.mnth_of_aug / NULLIF(COALESCE(units.mnth_of_aug, 0) + COALESCE(bop.mnth_of_aug, 0), 0), 0) + COALESCE(sales.mnth_of_jul / NULLIF(COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0), 0), 0) AS mnth_of_dec,
-    COALESCE(sales.mnth_of_jan / NULLIF(COALESCE(units.mnth_of_jan, 0) + COALESCE(bop.mnth_of_jan, 0), 0), 0) AS mnth_of_jan,
-    COALESCE(sales.mnth_of_feb / NULLIF(COALESCE(units.mnth_of_feb, 0) + COALESCE(bop.mnth_of_feb, 0), 0), 0) + COALESCE(sales.mnth_of_jan / NULLIF(COALESCE(units.mnth_of_jan, 0) + COALESCE(bop.mnth_of_jan, 0), 0), 0) AS mnth_of_feb,
-    COALESCE(sales.mnth_of_mar / NULLIF(COALESCE(units.mnth_of_mar, 0) + COALESCE(bop.mnth_of_mar, 0), 0), 0) + COALESCE(sales.mnth_of_feb / NULLIF(COALESCE(units.mnth_of_feb, 0) + COALESCE(bop.mnth_of_feb, 0), 0), 0) + COALESCE(sales.mnth_of_jan / NULLIF(COALESCE(units.mnth_of_jan, 0) + COALESCE(bop.mnth_of_jan, 0), 0), 0) AS mnth_of_mar,
-    COALESCE(sales.mnth_of_apr / NULLIF(COALESCE(units.mnth_of_apr, 0) + COALESCE(bop.mnth_of_apr, 0), 0), 0) + COALESCE(sales.mnth_of_mar / NULLIF(COALESCE(units.mnth_of_mar, 0) + COALESCE(bop.mnth_of_mar, 0), 0), 0) + COALESCE(sales.mnth_of_feb / NULLIF(COALESCE(units.mnth_of_feb, 0) + COALESCE(bop.mnth_of_feb, 0), 0), 0) + COALESCE(sales.mnth_of_jan / NULLIF(COALESCE(units.mnth_of_jan, 0) + COALESCE(bop.mnth_of_jan, 0), 0), 0) AS mnth_of_apr,
-    COALESCE(sales.mnth_of_may / NULLIF(COALESCE(units.mnth_of_may, 0) + COALESCE(bop.mnth_of_may, 0), 0), 0) + COALESCE(sales.mnth_of_apr / NULLIF(COALESCE(units.mnth_of_apr, 0) + COALESCE(bop.mnth_of_apr, 0), 0), 0) + COALESCE(sales.mnth_of_mar / NULLIF(COALESCE(units.mnth_of_mar, 0) + COALESCE(bop.mnth_of_mar, 0), 0), 0) + COALESCE(sales.mnth_of_feb / NULLIF(COALESCE(units.mnth_of_feb, 0) + COALESCE(bop.mnth_of_feb, 0), 0), 0) + COALESCE(sales.mnth_of_jan / NULLIF(COALESCE(units.mnth_of_jan, 0) + COALESCE(bop.mnth_of_jan, 0), 0), 0) AS mnth_of_may,
-    COALESCE(sales.mnth_of_jun / NULLIF(COALESCE(units.mnth_of_jun
-
-
-
-
-COALESCE(sales.mnth_of_jul / NULLIF((COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0)), 0), 0) AS mnth_of_jul,
-COALESCE(sales.mnth_of_aug / NULLIF((COALESCE(units.mnth_of_aug, 0) + COALESCE(bop.mnth_of_aug, 0)), 0), 0) + COALESCE(sales.mnth_of_jul / NULLIF((COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0)), 0), 0) AS mnth_of_aug,
-COALESCE(sales.mnth_of_sep / NULLIF((COALESCE(units.mnth_of_sep, 0) + COALESCE(bop.mnth_of_sep, 0)), 0), 0) + COALESCE(sales.mnth_of_aug / NULLIF((COALESCE(units.mnth_of_aug, 0) + COALESCE(bop.mnth_of_aug, 0)), 0), 0) + COALESCE(sales.mnth_of_jul / NULLIF((COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0)), 0), 0) AS mnth_of_sep,
-COALESCE(sales.mnth_of_oct / NULLIF((COALESCE(units.mnth_of_oct, 0) + COALESCE(bop.mnth_of_oct, 0)), 0), 0) + COALESCE(sales.mnth_of_sep / NULLIF((COALESCE(units.mnth_of_sep, 0) + COALESCE(bop.mnth_of_sep, 0)), 0), 0) + COALESCE(sales.mnth_of_aug / NULLIF((COALESCE(units.mnth_of_aug, 0) + COALESCE(bop.mnth_of_aug, 0)), 0), 0) + COALESCE(sales.mnth_of_jul / NULLIF((COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0)), 0), 0) AS mnth_of_oct,
-COALESCE(sales.mnth_of_nov / NULLIF((COALESCE(units.mnth_of_nov, 0) + COALESCE(bop.mnth_of_nov, 0)), 0), 0) + COALESCE(sales.mnth_of_oct / NULLIF((COALESCE(units.mnth_of_oct, 0) + COALESCE(bop.mnth_of_oct, 0)), 0), 0) + COALESCE(sales.mnth_of_sep / NULLIF((COALESCE(units.mnth_of_sep, 0) + COALESCE(bop.mnth_of_sep, 0)), 0), 0) + COALESCE(sales.mnth_of_aug / NULLIF((COALESCE(units.mnth_of_aug, 0) + COALESCE(bop.mnth_of_aug, 0)), 0), 0) + COALESCE(sales.mnth_of_jul / NULLIF((COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0)), 0), 0) AS mnth_of_nov,
-COALESCE(sales.mnth_of_dec / NULLIF((COALESCE(units.mnth_of_dec, 0) + COALESCE(bop.mnth_of_dec, 0)), 0), 0) + COALESCE(sales.mnth_of_nov / NULLIF((COALESCE(units.mnth_of_nov, 0) + COALESCE(bop.mnth_of_nov, 0)), 0), 0) + COALESCE(sales.mnth_of_oct / NULLIF((COALESCE(units.mnth_of_oct, 0) + COALESCE(bop.mnth_of_oct, 0)), 0), 0) + COALESCE(sales.mnth_of_sep / NULLIF((COALESCE(units.mnth_of_sep, 0) + COALESCE(bop.mnth_of_sep, 0)), 0), 0) + COALESCE(sales.mnth_of_aug / NULLIF((COALESCE(units.mnth_of_aug, 0) + COALESCE(bop.mnth_of_aug, 0)), 0), 0) + COALESCE(sales.mnth_of_jul / NULLIF((COALESCE(units.mnth_of_jul, 0) + COALESCE(bop.mnth_of_jul, 0)), 0), 0) AS mnth_of_dec,
-COALESCE(sales.mnth_of_jan / NULLIF((COALESCE(units.mnth_of_jan, 0) + COALESCE(bop.mnth_of_jan, 0)), 0), 0) AS mnth_of_jan,
-COALESCE(sales.mnth_of_feb / NULLIF((COALESCE(units.mnth_of_feb, 0) + COALESCE(bop.mnth_of_feb, 0)), 0), 0) + COALESCE(sales.mnth_of_jan / NULLIF((COALESCE(units.mnth_of_jan, 0) + COALESCE(bop.mnth_of_jan, 0)), 0), 0) AS mnth_of_feb,
-COALESCE(sales.mnth_of_mar / NULLIF((COALESCE(units.mnth_of_mar, 0) + COALESCE(bop.mnth_of_mar, 0)), 0), 0) + COALESCE(sales.mnth_of_feb / NULLIF((COALESCE(units.mnth_of_feb, 0) + COALESCE(bop.mnth_of_feb, 0)), 0), 0) + COALESCE(sales.mnth_of_jan / NULLIF((COALESCE(units.mnth_of_jan, 0) + COALESCE(bop.mnth_of_jan, 0)), 0), 0) AS mnth_of_mar,
-COALESCE(sales.mnth_of_apr / NULLIF((COALESCE(units.mnth_of_apr, 0) + COALESCE(bop.mnth_of_apr, 0)), 0), 0) + COALESCE(sales.mnth_of_mar / NULLIF((COALESCE(units.mnth_of_mar, 0) + COALESCE(bop.mnth_of_mar, 0)), 0), 0) + COALESCE(sales.mnth_of_feb / NULLIF((COALESCE(units.mnth_of_feb, 0) + COALESCE(bop.mnth_of_feb, 0)), 0), 0) + COALESCE(sales.mnth_of_jan / NULLIF((COALESCE(units.mnth_of_jan, 0) + COALESCE(bop.mnth_of_jan, 0)), 0), 0) AS mnth_of_apr,
-COALESCE(sales.mnth_of_may / NULLIF((COALESCE(units.mnth_of_may, 0) + COALESCE(bop.mnth_of_may, 0)), 0), 0) + COALESCE(sales.mnth_of_apr / NULLIF((COALESCE(units.mnth_of_apr, 0) + COALESCE(bop.mnth_of_apr, 0)), 0), 0) + COALESCE(sales.mnth_of_mar / NULLIF((COALESCE(units.mnth_of_mar, 0) + COALESCE(bop.mnth_of_mar, 0)), 0), 0) + COALESCE(sales.mnth_of_feb / NULLIF((COALESCE(units.mnth_of_feb, 0) + COALESCE(bop.mnth_of_feb, 0)), 0), 0) + COALESCE(sales.mnth_of_jan / NULLIF((COALESCE(units.mnth_of_jan, 0) + COALESCE(bop.mnth_of_jan, 0)), 0), 0) AS mnth_of_may,
-COALESCE(sales.mnth_of_jun / NULLIF((COALESCE(units.mnth_of_jun, 0) + COALESCE(bop.mnth_of_jun, 0)), 0), 0) + COALESCE(sales.mnth_of_may / NULLIF((COALESCE(units.mnth_of_may, 0) + COALESCE(bop.mnth_of_may, 0)), 0), 0) + COALESCE(sales.mnth_of_apr / NULLIF((COALESCE(units.mnth_of_apr, 0) + COALESCE(bop.mnth_of_apr, 0)), 0), 0) + COALESCE(sales.mnth_of_mar / NULLIF((COALESCE(units.mnth_of_mar, 0) + COALESCE(bop.mnth_of_mar, 0)), 0), 0) + COALESCE(sales.mnth_of_feb / NULLIF((COALESCE(units.mnth_of_feb, 0) + COALESCE(bop.mnth_of_feb, 0)), 0), 0) + COALESCE(sales.mnth_of_jan / NULLIF((COALESCE(units.mnth_of_jan, 0) + COALESCE(bop.mnth_of_jan, 0)), 0), 0) AS mnth_of_jun
-
+FWGS_Sales_$LY_test =
+VAR SelectedYear = SELECTEDVALUE(T_PLCB_CAL_DIM[NBR_YEAR_454])
+VAR SelectedWeekRange = VALUES(T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454])
+RETURN
+    IF(
+        NOT HASONEVALUE(T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454]),
+        SUMX(
+            VALUES(T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454]),
+            CALCULATE(
+                SUM(T_PLCB_INV_SALES_WKLY_FACT[AMT_SALE]),
+                T_PLCB_LOC_DIM[CDE_EDW_CAT_LOC] = "FWGS",
+                T_PLCB_INV_SALES_WKLY_FACT[RS] = 1,
+                T_PLCB_CAL_DIM[NBR_YEAR_454] = SelectedYear - 1,
+                T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454] IN SelectedWeekRange
+            )
+        ),
+        CALCULATE(
+            SUM(T_PLCB_INV_SALES_WKLY_FACT[AMT_SALE]),
+            T_PLCB_LOC_DIM[CDE_EDW_CAT_LOC] = "FWGS",
+            T_PLCB_INV_SALES_WKLY_FACT[RS] = 1,
+            T_PLCB_CAL_DIM[NBR_YEAR_454] = SelectedYear - 1,
+            T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454] = SELECTEDVALUE(T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454])
+        )
+    )
