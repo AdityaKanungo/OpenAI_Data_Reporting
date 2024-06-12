@@ -2,10 +2,17 @@ FWGS_Sales_$LY_test =
 VAR SelectedYear = SELECTEDVALUE(T_PLCB_CAL_DIM[NBR_YEAR_454])
 VAR SelectedWeeks = VALUES(T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454])
 RETURN
-    CALCULATE(
-        SUM(T_PLCB_INV_SALES_WKLY_FACT[AMT_SALE]),
-        T_PLCB_LOC_DIM[CDE_EDW_CAT_LOC] = "FWGS",
-        T_PLCB_INV_SALES_WKLY_FACT[RS] = 1,
-        T_PLCB_CAL_DIM[NBR_YEAR_454] = SelectedYear - 1,
-        T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454] IN SelectedWeeks
+    IF(
+        ISFILTERED(T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454]),
+        CALCULATE(
+            SUM(T_PLCB_INV_SALES_WKLY_FACT[AMT_SALE]),
+            FILTER(
+                ALL(T_PLCB_CAL_DIM),
+                T_PLCB_CAL_DIM[NBR_YEAR_454] = SelectedYear - 1 &&
+                T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454] IN SelectedWeeks
+            ),
+            T_PLCB_LOC_DIM[CDE_EDW_CAT_LOC] = "FWGS",
+            T_PLCB_INV_SALES_WKLY_FACT[RS] = 1
+        ),
+        BLANK()
     )
