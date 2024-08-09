@@ -1,5 +1,5 @@
 import docx
-from TickToken import TickToken
+import tiktoken
 
 def read_word_file(file_path):
     # Open the Word file and extract text
@@ -10,23 +10,23 @@ def read_word_file(file_path):
     return '\n'.join(full_text)
 
 def count_tokens(text):
-    # Initialize the TickToken tokenizer
-    tokenizer = TickToken()
-    
+    # Initialize the tiktoken tokenizer
+    tokenizer = tiktoken.get_encoding("cl100k_base")
+
     # Tokenize the text and count tokens
-    tokens = tokenizer.tokenize(text)
+    tokens = tokenizer.encode(text)
     return len(tokens)
 
 def main():
     # File path to your Word document
     file_path = "your_word_file.docx"
-    
+
     # Read the Word file
     text = read_word_file(file_path)
-    
+
     # Count the tokens
     token_count = count_tokens(text)
-    
+
     # Output the token count
     print(f"Total Token Count: {token_count}")
 
