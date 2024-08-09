@@ -1,29 +1,34 @@
-FWGS_Sales_$LY_test =
-VAR SelectedYear = SELECTEDVALUE(T_PLCB_CAL_DIM[NBR_YEAR_454])
-VAR SelectedWeek = SELECTEDVALUE(T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454])
-VAR IsTotal = NOT HASONEVALUE(T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454])
-VAR WeekRange = CALCULATETABLE(
-    VALUES(T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454]),
-    ALLSELECTED(T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454])
-)
-RETURN
-    IF(
-        IsTotal,
-        CALCULATE(
-            SUM(T_PLCB_INV_SALES_WKLY_FACT[AMT_SALE]),
-            T_PLCB_LOC_DIM[CDE_EDW_CAT_LOC] = "FWGS",
-            T_PLCB_INV_SALES_WKLY_FACT[RS] = 1,
-            FILTER(
-                ALL(T_PLCB_CAL_DIM),
-                T_PLCB_CAL_DIM[NBR_YEAR_454] = SelectedYear - 1 &&
-                T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454] IN WeekRange
-            )
-        ),
-        CALCULATE(
-            SUM(T_PLCB_INV_SALES_WKLY_FACT[AMT_SALE]),
-            T_PLCB_LOC_DIM[CDE_EDW_CAT_LOC] = "FWGS",
-            T_PLCB_INV_SALES_WKLY_FACT[RS] = 1,
-            T_PLCB_CAL_DIM[NBR_YEAR_454] = SelectedYear - 1,
-            T_PLCB_CAL_DIM[NBR_WEEK_YEAR_454] = SelectedWeek
-        )
-    )
+import docx
+from TickToken import TickToken
+
+def read_word_file(file_path):
+    # Open the Word file and extract text
+    doc = docx.Document(file_path)
+    full_text = []
+    for paragraph in doc.paragraphs:
+        full_text.append(paragraph.text)
+    return '\n'.join(full_text)
+
+def count_tokens(text):
+    # Initialize the TickToken tokenizer
+    tokenizer = TickToken()
+    
+    # Tokenize the text and count tokens
+    tokens = tokenizer.tokenize(text)
+    return len(tokens)
+
+def main():
+    # File path to your Word document
+    file_path = "your_word_file.docx"
+    
+    # Read the Word file
+    text = read_word_file(file_path)
+    
+    # Count the tokens
+    token_count = count_tokens(text)
+    
+    # Output the token count
+    print(f"Total Token Count: {token_count}")
+
+if __name__ == "__main__":
+    main()
