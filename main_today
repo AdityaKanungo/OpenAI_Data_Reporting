@@ -1,32 +1,42 @@
 import docx
 import tiktoken
+import os
 
 def read_word_file(file_path):
-    # Open the Word file and extract text
+    """Read and extract text from a Word file."""
     doc = docx.Document(file_path)
     full_text = []
     for paragraph in doc.paragraphs:
         full_text.append(paragraph.text)
     return '\n'.join(full_text)
 
-def count_tokens(text):
-    # Initialize the tiktoken tokenizer
-    tokenizer = tiktoken.get_encoding("cl100k_base")
+def read_text_file(file_path):
+    """Read and extract text from a text file."""
+    with open(file_path, 'r', encoding='utf-8') as file:
+        return file.read()
 
-    # Tokenize the text and count tokens
+def count_tokens(text):
+    """Tokenize text using tiktoken and count tokens."""
+    tokenizer = tiktoken.get_encoding("cl100k_base")
     tokens = tokenizer.encode(text)
     return len(tokens)
 
 def main():
-    # File path to your Word document
-    file_path = "your_word_file.docx"
+    # File path to your document (either .docx or .txt)
+    file_path = "your_file.docx"  # or "your_file.txt"
 
-    # Read the Word file
-    text = read_word_file(file_path)
-
+    # Check the file extension and read accordingly
+    if file_path.endswith('.docx'):
+        text = read_word_file(file_path)
+    elif file_path.endswith('.txt'):
+        text = read_text_file(file_path)
+    else:
+        print("Unsupported file type. Please use a .docx or .txt file.")
+        return
+    
     # Count the tokens
     token_count = count_tokens(text)
-
+    
     # Output the token count
     print(f"Total Token Count: {token_count}")
 
