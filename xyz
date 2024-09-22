@@ -1,68 +1,160 @@
-import openai
-import json
+import tiktoken
 import os
+import re
+import json
+import time
+from openai import AzureOpenAI
 
-# Set OpenAI API configuration
-openai.api_type = "azure"
-openai.api_base = "https://<your-endpoint>.openai.azure.com"
-openai.api_version = "2023-09-01-preview"
-openai.api_key = "<your-api-key>"
+# Define prompt templates
+user_prompt_template = """
+You will be analyzing multiple COBOL batch programs provided by the user.
+Each program has a start sequence, end sequence, and may involve multiple interim files.
+Identify all variables defined in the WORKING-STORAGE SECTION and LINKAGE SECTION,
+including their data types, initial values, and any relevant descriptions or comments.
+Then trace how each variable is used, modified, or transformed throughout the PROCEDURE DIVISION.
 
-def analyze_full_cobol_code(cobol_code):
-    # Construct the user prompt for the full code analysis
-    user_prompt = f"Analyze the entire COBOL code provided below. Identify all variables defined in the WORKING-STORAGE SECTION and LINKAGE SECTION, including their data types, initial values, and any descriptions. Then trace how each variable is used, modified, or transformed throughout the PROCEDURE DIVISION. Provide the details in JSON format:\n\n{cobol_code}"
+For each program, provide the following details in the JSON format:
 
-    # Call the OpenAI API with the constructed prompt
-    try:
-        response = openai.Completion.create(
-            engine="your-deployed-engine-name",
-            prompt=user_prompt,
-            max_tokens=4000,  # Adjust max tokens as needed
+{
+  "program_name": "name_of_the_program",
+  "start_sequence": "start_sequence_identifier",
+  "end_sequence": "end_sequence_identifier",
+  "interim_files": ["list_of_interim_files"],
+  "input_sources": ["input_files_if_any"],
+  "variables": [
+    {
+      "variable_name": "string",
+      "data_type": "string",
+      "initial_value": "string or null",
+      "description": "string or null"
+    }
+  ],
+  "transformations": [
+    {
+      "variable_name": "string",
+      "line_number": "integer",
+      "operation": "description of the transformation",
+      "logic": "explanation of the logic applied",
+      "affected_by": ["list of other variables influencing this transformation"]
+    }
+  ],
+  "output_destinations": ["list_of_output_files"]
+}
+
+Example JSON Output:
+{
+  "program_name": "Program2",
+  "start_sequence": "START-PROGRAM2",
+  "end_sequence": "END-PROGRAM2",
+  "interim_files": ["file_interim1.txt", "file_interim2.txt"],
+  "input_sources": ["output_file_X"],
+  "variables": [
+    {
+      "variable_name": "VAR2",
+      "data_type": "numeric",
+      "initial_value": null,
+      "description": "Total sales read from Program1 output"
+    }
+  ],
+  "transformations": [
+    {
+      "variable_name": "VAR2",
+      "line_number": 30,
+      "operation": "MULTIPLY 1.2",
+      "logic": "Apply 20% sales tax",
+      "affected_by": ["output_file_X"]
+    }
+  ],
+  "output_destinations": ["final_output.txt"]
+}
+"""
+
+system_prompt = """
+You are an expert COBOL code analyzer.
+Your task is to analyze each COBOL program provided by the user.
+You need to identify all variables defined in the WORKING-STORAGE SECTION and LINKAGE SECTION,
+including their data types, initial values, and any relevant descriptions or comments.
+Furthermore, you must track how each of these variables is used, modified, or transformed throughout the PROCEDURE DIVISION.
+Your goal is to provide a comprehensive JSON output that captures each variable's complete lifecycle,
+from its initial definition to its final state, including any transformations, calculations, and dependencies.
+"""
+
+# Functions
+def num_tokens_from_string(string: str, encoding_name: str) -> int:
+    encoding = tiktoken.get_encoding(encoding_name)
+    num_tokens = len(encoding.encode(string))
+    return num_tokens
+
+def remove_comments(cobol_code):
+    inline_comment_pattern = r'^.{6}[*$]'
+    cobol_code = re.sub(inline_comment_pattern, '', cobol_code, flags=re.MULTILINE)
+    return cobol_code
+
+def read_file(file: str) -> str:
+    with open(file, 'r', encoding='utf-8') as cobol_file:
+        contents = cobol_file.read()
+    return contents
+
+def analyze_cobol_code(contents, user_prompt, system_prompt):
+    user_prompt = user_prompt + contents
+    if num_tokens_from_string(user_prompt, 'cl100k_base') < 300000:
+        response = client.chat.completions.create(
+            model = deployment_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
             temperature=0.2
         )
-        return response['choices'][0]['text']
-    except Exception as e:
-        print(f"Error during OpenAI API call: {e}")
+        return response.choices[0].message.content
+    else:
+        print(f"File is too large at {num_tokens_from_string(user_prompt, 'cl100k_base')} tokens")
         return None
 
-def process_entire_cobol_file(file_path):
-    # Read the entire COBOL code file
-    try:
-        with open(file_path, 'r') as file:
-            cobol_code = file.read()
-    except FileNotFoundError:
-        print(f"Error: File not found at {file_path}")
-        return
-    except Exception as e:
-        print(f"Error reading file: {e}")
-        return
+def process_batch_files(batch_directory, output_directory):
+    start_time = time.time()
+    os.chdir(batch_directory)
+    batch_files = [f for f in os.listdir(batch_directory) if f.endswith('.txt')]
     
-    # Step 1: Analyze the entire COBOL code in one call
-    analysis_result = analyze_full_cobol_code(cobol_code)
-    
-    if analysis_result:
-        # Attempt to parse the result as JSON
-        try:
-            analysis_json = json.loads(analysis_result)
-            
-            # Extract the original filename and change the extension to .json
-            base_filename = os.path.splitext(os.path.basename(file_path))[0]
-            json_filename = f"{base_filename}.json"
-            
-            # Save the analysis result in a JSON file
-            with open(json_filename, "w") as json_file:
-                json.dump(analysis_json, json_file, indent=4)
-            
-            print(f"Analysis successfully saved to {json_filename}")
-        except json.JSONDecodeError:
-            print("Error: The response from OpenAI was not in the expected JSON format.")
-            # Save the raw response for further inspection
-            raw_filename = f"{base_filename}_analysis_raw.txt"
-            with open(raw_filename, "w") as text_file:
-                text_file.write(analysis_result)
-            print(f"Raw analysis saved to {raw_filename}")
-    else:
-        print("No analysis result returned from OpenAI API.")
+    consolidated_results = []
 
-# Example usage
-process_entire_cobol_file("path/to/your/cobol_code.cbl")
+    for batch_file in batch_files:
+        print(f"Processing file: {batch_file}")
+        
+        # Read and clean the COBOL code
+        file_contents = read_file(batch_file)
+        cobol_code = remove_comments(file_contents)
+        
+        # Analyze the code with LLM
+        analysis_result = analyze_cobol_code(cobol_code, user_prompt_template, system_prompt)
+
+        if analysis_result:
+            try:
+                # Parse the result as JSON and store it
+                analysis_json = json.loads(analysis_result)
+                consolidated_results.append(analysis_json)
+                
+                # Save individual program's JSON output
+                json_filename = os.path.join(output_directory, f"{batch_file.split('.')[0]}_analysis.json")
+                with open(json_filename, "w", encoding='utf-8') as json_file:
+                    json.dump(analysis_json, json_file, indent=4)
+                print(f"Analysis successfully saved to {json_filename}")
+                
+            except json.JSONDecodeError:
+                print(f"Error: The response from OpenAI was not in the expected JSON format for {batch_file}")
+
+    # Save the consolidated JSON output for all programs
+    consolidated_filename = os.path.join(output_directory, "consolidated_analysis.json")
+    with open(consolidated_filename, "w", encoding='utf-8') as consolidated_file:
+        json.dump(consolidated_results, consolidated_file, indent=4)
+    
+    print(f"Consolidated JSON output saved to {consolidated_filename}")
+    print(f"Processing completed in {time.time() - start_time} seconds.")
+
+# Define your input and output directories
+batch_directory = r"path\to\batch_files"  # Update this path
+output_directory = r"path\to\output_files"  # Update this path
+
+# Run the processing function
+if __name__ == "__main__":
+    process_batch_files(batch_directory, output_directory)
