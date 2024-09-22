@@ -1,3 +1,32 @@
+You are an expert COBOL code analyzer. Your task is to analyze an entire COBOL program provided by the user. You need to identify all variables defined in the WORKING-STORAGE SECTION and LINKAGE SECTION, including their data types, initial values, and any relevant descriptions or comments. Furthermore, you must track how each of these variables is used, modified, or transformed throughout the PROCEDURE DIVISION. Your goal is to provide a comprehensive JSON output that captures each variable's complete lifecycle, from its initial definition to its final state, including any transformations, calculations, and dependencies.
+
+
+Analyze the entire COBOL code provided below. Identify all variables defined in the WORKING-STORAGE SECTION and LINKAGE SECTION, including their data types, initial values, and any descriptions or comments. Then trace how each variable is used, modified, or transformed throughout the PROCEDURE DIVISION. Provide the details in the following JSON format:
+
+{
+  "variables": [
+    {
+      "variable_name": "string",
+      "data_type": "string",
+      "initial_value": "string or null",
+      "description": "string or null"
+    }
+  ],
+  "transformations": [
+    {
+      "variable_name": "string",
+      "line_number": "integer",
+      "operation": "description of the transformation",
+      "logic": "explanation of the logic applied",
+      "affected_by": ["list of other variables influencing this transformation"]
+    }
+  ]
+}
+
+COBOL Code:
+<Insert full COBOL code here>
+
+
 import openai
 import json
 
