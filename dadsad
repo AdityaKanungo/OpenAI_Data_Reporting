@@ -1,17 +1,21 @@
-# Updated analyze_cobol_code to always split contents and handle plain text
+# Updated analyze_cobol_code to split into four parts and handle plain text
 def analyze_cobol_code(contents, user_prompt, system_prompt):
-    # Split the content into two halves regardless
-    mid_point = len(contents) // 2
-    part1 = contents[:mid_point]
-    part2 = contents[mid_point:]
+    # Split the content into four parts
+    quarter_length = len(contents) // 4
+    part1 = contents[:quarter_length]
+    part2 = contents[quarter_length: 2 * quarter_length]
+    part3 = contents[2 * quarter_length: 3 * quarter_length]
+    part4 = contents[3 * quarter_length:]
     
     # Analyze each part separately and get plain text output
     part1_result = analyze_cobol_code_single(part1, user_prompt, system_prompt)
     part2_result = analyze_cobol_code_single(part2, user_prompt, system_prompt)
+    part3_result = analyze_cobol_code_single(part3, user_prompt, system_prompt)
+    part4_result = analyze_cobol_code_single(part4, user_prompt, system_prompt)
     
-    # Combine both parts' results as plain text
-    if part1_result and part2_result:
-        combined_result = part1_result + "\n" + part2_result
+    # Combine all four parts' results as plain text
+    if part1_result and part2_result and part3_result and part4_result:
+        combined_result = part1_result + "\n" + part2_result + "\n" + part3_result + "\n" + part4_result
         return combined_result
     else:
         return None
@@ -45,7 +49,7 @@ def process_batch_files(batch_directory, output_directory, flow_details):
         file_contents = read_file(batch_file)
         cobol_code = remove_comments(file_contents)
         
-        # Analyze the code with forced splitting
+        # Analyze the code with forced splitting into four parts
         analysis_result = analyze_cobol_code(cobol_code, user_prompt_with_flow, system_prompt)
         
         if analysis_result:
