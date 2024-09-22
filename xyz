@@ -5,15 +5,20 @@ import json
 import time
 from openai import AzureOpenAI
 
-# Define prompt templates
+# Updated user prompt template with dynamic flow details
 user_prompt_template = """
-You will be analyzing multiple COBOL batch programs provided by the user.
-Each program has a start sequence, end sequence, and may involve multiple interim files.
+You will analyze multiple COBOL batch programs provided by the user.
 Identify all variables defined in the WORKING-STORAGE SECTION and LINKAGE SECTION,
-including their data types, initial values, and any relevant descriptions or comments.
+including their data types, initial values, and any descriptions or comments.
 Then trace how each variable is used, modified, or transformed throughout the PROCEDURE DIVISION.
 
-For each program, provide the following details in the JSON format:
+Here's the flow details for the batch programs:
+{flow_details}
+
+Please identify all the variables involved, their transformations, and how data flows from one program to the next.
+Capture all the necessary information to create a detailed understanding of each program's role in the batch processing flow.
+
+Provide the details in the following JSON format:
 
 {
   "program_name": "name_of_the_program",
@@ -40,33 +45,6 @@ For each program, provide the following details in the JSON format:
   ],
   "output_destinations": ["list_of_output_files"]
 }
-
-Example JSON Output:
-{
-  "program_name": "Program2",
-  "start_sequence": "START-PROGRAM2",
-  "end_sequence": "END-PROGRAM2",
-  "interim_files": ["file_interim1.txt", "file_interim2.txt"],
-  "input_sources": ["output_file_X"],
-  "variables": [
-    {
-      "variable_name": "VAR2",
-      "data_type": "numeric",
-      "initial_value": null,
-      "description": "Total sales read from Program1 output"
-    }
-  ],
-  "transformations": [
-    {
-      "variable_name": "VAR2",
-      "line_number": 30,
-      "operation": "MULTIPLY 1.2",
-      "logic": "Apply 20% sales tax",
-      "affected_by": ["output_file_X"]
-    }
-  ],
-  "output_destinations": ["final_output.txt"]
-}
 """
 
 system_prompt = """
@@ -75,11 +53,12 @@ Your task is to analyze each COBOL program provided by the user.
 You need to identify all variables defined in the WORKING-STORAGE SECTION and LINKAGE SECTION,
 including their data types, initial values, and any relevant descriptions or comments.
 Furthermore, you must track how each of these variables is used, modified, or transformed throughout the PROCEDURE DIVISION.
+Ensure you maintain the flow of data from one program to the next, retaining the linkage between programs based on their input and output.
 Your goal is to provide a comprehensive JSON output that captures each variable's complete lifecycle,
-from its initial definition to its final state, including any transformations, calculations, and dependencies.
+from its initial definition to its final state, including any transformations, calculations, and dependencies, across all programs.
 """
 
-# Functions
+# Helper functions
 def num_tokens_from_string(string: str, encoding_name: str) -> int:
     encoding = tiktoken.get_encoding(encoding_name)
     num_tokens = len(encoding.encode(string))
@@ -111,9 +90,14 @@ def analyze_cobol_code(contents, user_prompt, system_prompt):
         print(f"File is too large at {num_tokens_from_string(user_prompt, 'cl100k_base')} tokens")
         return None
 
-def process_batch_files(batch_directory, output_directory):
+def process_batch_files(batch_directory, output_directory, flow_details):
     start_time = time.time()
     os.chdir(batch_directory)
+    
+    # Incorporate flow details into the user prompt
+    user_prompt_with_flow = user_prompt_template.format(flow_details=flow_details)
+
+    # Process each COBOL program
     batch_files = [f for f in os.listdir(batch_directory) if f.endswith('.txt')]
     
     consolidated_results = []
@@ -125,12 +109,12 @@ def process_batch_files(batch_directory, output_directory):
         file_contents = read_file(batch_file)
         cobol_code = remove_comments(file_contents)
         
-        # Analyze the code with LLM
-        analysis_result = analyze_cobol_code(cobol_code, user_prompt_template, system_prompt)
+        # Analyze the code with LLM using the updated user prompt
+        analysis_result = analyze_cobol_code(cobol_code, user_prompt_with_flow, system_prompt)
 
         if analysis_result:
             try:
-                # Parse the result as JSON and store it
+                # Parse the result as JSON and add to consolidated results
                 analysis_json = json.loads(analysis_result)
                 consolidated_results.append(analysis_json)
                 
@@ -151,10 +135,15 @@ def process_batch_files(batch_directory, output_directory):
     print(f"Consolidated JSON output saved to {consolidated_filename}")
     print(f"Processing completed in {time.time() - start_time} seconds.")
 
-# Define your input and output directories
+# Define your input and output directories and flow details
 batch_directory = r"path\to\batch_files"  # Update this path
 output_directory = r"path\to\output_files"  # Update this path
+flow_details = """
+CIT23MS (Starting point) -> CIT25MS & CIT28MS
+CIT25MS & CIT28MS -> CIT22MS
+CIT22MS -> TNF23MS -> TNF22MS (Final_output)
+"""
 
 # Run the processing function
 if __name__ == "__main__":
-    process_batch_files(batch_directory, output_directory)
+    process_batch_files(batch_directory, output_directory, flow_details)
