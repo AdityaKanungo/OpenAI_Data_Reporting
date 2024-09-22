@@ -1,0 +1,44 @@
+import openai
+import json
+
+# Set OpenAI API configuration
+openai.api_type = "azure"
+openai.api_base = "https://<your-endpoint>.openai.azure.com"
+openai.api_version = "2023-09-01-preview"
+openai.api_key = "<your-api-key>"
+
+def analyze_full_cobol_code(cobol_code):
+    # Construct the user prompt for the full code analysis
+    user_prompt = f"Analyze the entire COBOL code below. Identify all variables defined in the WORKING-STORAGE SECTION and LINKAGE SECTION, including their data types, initial values, and any descriptions. Then trace how each variable is used, modified, or transformed throughout the PROCEDURE DIVISION. Provide the details in JSON format:\n\n{cobol_code}"
+
+    # Call the OpenAI API with the constructed prompt
+    response = openai.Completion.create(
+        engine="your-deployed-engine-name",
+        prompt=user_prompt,
+        max_tokens=4000,  # Adjust max tokens as needed
+        temperature=0.2
+    )
+    return response['choices'][0]['text']
+
+def process_entire_cobol_file(file_path):
+    # Read the entire COBOL code file
+    with open(file_path, 'r') as file:
+        cobol_code = file.read()
+    
+    # Step 1: Analyze the entire COBOL code in one call
+    analysis_result = analyze_full_cobol_code(cobol_code)
+    
+    # Step 2: Store the analysis result in JSON
+    try:
+        analysis_json = json.loads(analysis_result)
+        with open("cobol_full_analysis.json", "w") as json_file:
+            json.dump(analysis_json, json_file, indent=4)
+        print("Analysis successfully saved to cobol_full_analysis.json")
+    except json.JSONDecodeError:
+        print("Error: The response from OpenAI was not in the expected JSON format.")
+        with open("cobol_full_analysis_raw.txt", "w") as text_file:
+            text_file.write(analysis_result)
+        print("Raw analysis saved to cobol_full_analysis_raw.txt")
+
+# Example usage
+process_entire_cobol_file("path/to/your/cobol_code.cbl")
