@@ -1,0 +1,41 @@
+# Process each COBOL program
+batch_files = [f for f in os.listdir(batch_directory) if f.endswith('.txt')]
+
+consolidated_results = []
+
+for batch_file in batch_files:
+    print(f"Processing file: {batch_file}")
+    
+    # Read and clean the COBOL code
+    file_contents = read_file(batch_file)
+    cobol_code = remove_comments(file_contents)
+    
+    # Analyze the code with LLM using the updated user prompt
+    analysis_result = analyze_cobol_code(cobol_code, user_prompt_with_flow, system_prompt)
+
+    if analysis_result:
+        try:
+            # Attempt to parse the result as JSON
+            analysis_json = json.loads(analysis_result)
+            consolidated_results.append(analysis_json)
+            
+            # Save individual program's JSON output as text (since it's valid JSON)
+            json_filename = os.path.join(output_directory, f"{batch_file.split('.')[0]}_analysis.json.txt")
+            with open(json_filename, "w", encoding='utf-8') as json_file:
+                json.dump(analysis_json, json_file, indent=4)
+            print(f"Analysis successfully saved to {json_filename}")
+        
+        except json.JSONDecodeError:
+            # If not valid JSON, save as plain text to capture any extra output
+            text_filename = os.path.join(output_directory, f"{batch_file.split('.')[0]}_analysis_output.txt")
+            with open(text_filename, "w", encoding='utf-8') as text_file:
+                text_file.write(analysis_result)
+            print(f"Analysis saved as plain text to {text_filename}")
+
+# Save the consolidated JSON output for all programs (only if they were parsed correctly)
+consolidated_filename = os.path.join(output_directory, "consolidated_analysis.json")
+with open(consolidated_filename, "w", encoding='utf-8') as consolidated_file:
+    json.dump(consolidated_results, consolidated_file, indent=4)
+
+print(f"Consolidated JSON output saved to {consolidated_filename}")
+print(f"Processing completed in {time.time() - start_time} seconds.")
