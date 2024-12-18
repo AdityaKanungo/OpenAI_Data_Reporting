@@ -1,7 +1,7 @@
-Platform	Data Sharing Support	Rating	Technical Details	Disadvantage
-Snowflake	Yes	High	Supports secure data sharing without data duplication using Data Sharing and Data Clean Rooms. Shares data across accounts and clouds.	Limited to Snowflake accounts; cross-platform sharing requires additional setup or ETL processes.
-Databricks	Yes	Moderate	Data sharing via Delta Sharing, an open protocol for secure sharing of Delta Lake tables; supports cross-platform sharing.	Limited adoption of Delta Sharing; not as seamless as Snowflake for multi-cloud environments.
-Google BigQuery	Yes	High	Offers BigQuery Omni for cross-cloud sharing and dataset-level sharing with detailed access controls.	Sharing between non-Google platforms requires additional configurations and cost implications.
-Oracle Autonomous DB	Yes	Moderate	Data sharing supported within the Oracle ecosystem using Data Pump and Oracle GoldenGate for replication.	Lacks seamless multi-cloud sharing; heavily tied to Oracle products.
-Azure Synapse	Yes	Moderate	Enables sharing via Azure Data Share, allowing secure sharing with Azure services and external accounts.	Limited to Azure ecosystem; cross-cloud sharing can be cumbersome.
-Amazon Redshift	Yes	Moderate	Data sharing through Redshift Data Sharing, allowing near real-time sharing across clusters in the same AWS account.	Restricted to same-region or account sharing; cross-platform or multi-cloud sharing requires ETL.
+Platform	Avoiding Data Duplication Support	Rating	Technical Details	Disadvantage
+Snowflake	Yes	High	Leverages zero-copy cloning and data sharing to avoid physical data duplication. Supports shared metadata and optimized storage.	Requires Snowflake-specific architecture; challenging to integrate with external systems efficiently.
+Databricks	Yes	High	Uses Delta Lake with versioning and time travel to avoid unnecessary duplication while maintaining history.	Delta Lake versioning can increase metadata overhead, impacting performance with large datasets.
+Google BigQuery	Yes	High	Supports views and materialized views to avoid duplication; uses separation of storage and compute.	Materialized views require periodic refreshes, which may create temporary redundancies.
+Oracle Autonomous DB	Yes	Moderate	Avoids duplication via database links and schema-level optimizations; supports references to external tables.	Schema-level optimizations are Oracle-specific, limiting integration with other ecosystems.
+Azure Synapse	Yes	Moderate	Prevents duplication through external tables and PolyBase, enabling querying of external data without replication.	PolyBase configurations can be complex, and storage inefficiencies may still arise in certain cases.
+Amazon Redshift	Yes	Moderate	Avoids duplication using views and materialized views; supports Spectrum for querying external data.	Materialized views create storage overhead and require management to avoid redundant copies.
