@@ -1,7 +1,7 @@
-Platform	Self-Service Analytics Support	Rating	Technical Details	Disadvantage
-Snowflake	Yes	High	Provides Snowflake Worksheets for ad-hoc queries, supports BI integrations (Tableau, Power BI) with SQL-based analytics.	Requires SQL expertise; limited native visualization tools for non-technical users.
-Databricks	Yes	Moderate	Supports notebook-based exploration with Python, R, SQL, and Scala; integrates with BI tools for broader access.	Notebook interface can be complex for non-technical users, requiring coding skills.
-Google BigQuery	Yes	High	Offers BigQuery Console with easy-to-use SQL editor, integrates with Looker for interactive dashboards and exploration.	Dependency on SQL may be a barrier for less technical users; limited native reporting tools.
-Oracle Autonomous DB	Yes	Moderate	Provides Oracle Analytics Cloud integration for self-service reporting; supports ML-driven insights for users.	Strong reliance on Oracle Analytics tools limits flexibility for non-Oracle environments.
-Azure Synapse	Yes	Moderate	Integrates with Power BI for self-service visualization; provides Synapse Studio for SQL-based ad-hoc analytics.	Limited built-in visualization capabilities compared to dedicated analytics platforms.
-Amazon Redshift	Yes	Moderate	Supports self-service analytics through QuickSight integration; offers SQL-based queries for ad-hoc analysis.	QuickSight features are basic compared to Tableau or Power BI, limiting advanced self-service capabilities.
+Platform	Advanced Analytics & AI/ML Support	Rating	Technical Details	Disadvantage
+Snowflake	Yes	Moderate	Supports integrations with AI/ML frameworks like TensorFlow, SageMaker, and DataRobot; offers Snowpark for Python-based analytics.	Lacks native ML capabilities; heavily reliant on third-party tools for AI/ML functionality.
+Databricks	Yes	High	Provides native ML support with MLflow; built-in support for popular libraries like Scikit-learn, TensorFlow, and PyTorch.	High compute costs for large-scale predictive models.
+Google BigQuery	Yes	High	Features BigQuery ML for native ML modeling using SQL; integrates seamlessly with Vertex AI for advanced AI/ML workflows.	Limited flexibility for complex ML algorithms beyond SQL-based capabilities.
+Oracle Autonomous DB	Yes	Moderate	Includes Oracle Machine Learning (OML) for SQL-based ML and Python integration; supports predictive analytics with Oracle tools.	Predominantly optimized for Oracle ecosystem; limited flexibility for non-Oracle tools.
+Azure Synapse	Yes	Moderate	Integrates with Azure Machine Learning and Synapse Studio for predictive analytics and advanced ML workflows.	Relies heavily on external Azure services for advanced AI/ML capabilities.
+Amazon Redshift	Yes	Moderate	Supports AI/ML through integration with SageMaker and Redshift ML for in-database predictive analytics using SQL.	SQL-based ML is limited for complex workflows; heavily relies on SageMaker for advanced functionality.
