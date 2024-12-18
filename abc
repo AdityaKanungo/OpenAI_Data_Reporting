@@ -1,7 +1,7 @@
-Platform	Avoiding Data Duplication Support	Rating	Technical Details	Disadvantage
-Snowflake	Yes	High	Leverages zero-copy cloning and data sharing to avoid physical data duplication. Supports shared metadata and optimized storage.	Requires Snowflake-specific architecture; challenging to integrate with external systems efficiently.
-Databricks	Yes	High	Uses Delta Lake with versioning and time travel to avoid unnecessary duplication while maintaining history.	Delta Lake versioning can increase metadata overhead, impacting performance with large datasets.
-Google BigQuery	Yes	High	Supports views and materialized views to avoid duplication; uses separation of storage and compute.	Materialized views require periodic refreshes, which may create temporary redundancies.
-Oracle Autonomous DB	Yes	Moderate	Avoids duplication via database links and schema-level optimizations; supports references to external tables.	Schema-level optimizations are Oracle-specific, limiting integration with other ecosystems.
-Azure Synapse	Yes	Moderate	Prevents duplication through external tables and PolyBase, enabling querying of external data without replication.	PolyBase configurations can be complex, and storage inefficiencies may still arise in certain cases.
-Amazon Redshift	Yes	Moderate	Avoids duplication using views and materialized views; supports Spectrum for querying external data.	Materialized views create storage overhead and require management to avoid redundant copies.
+Platform	Self-Service Analytics Support	Rating	Technical Details	Disadvantage
+Snowflake	Yes	High	Provides Snowflake Worksheets for ad-hoc queries, supports BI integrations (Tableau, Power BI) with SQL-based analytics.	Requires SQL expertise; limited native visualization tools for non-technical users.
+Databricks	Yes	Moderate	Supports notebook-based exploration with Python, R, SQL, and Scala; integrates with BI tools for broader access.	Notebook interface can be complex for non-technical users, requiring coding skills.
+Google BigQuery	Yes	High	Offers BigQuery Console with easy-to-use SQL editor, integrates with Looker for interactive dashboards and exploration.	Dependency on SQL may be a barrier for less technical users; limited native reporting tools.
+Oracle Autonomous DB	Yes	Moderate	Provides Oracle Analytics Cloud integration for self-service reporting; supports ML-driven insights for users.	Strong reliance on Oracle Analytics tools limits flexibility for non-Oracle environments.
+Azure Synapse	Yes	Moderate	Integrates with Power BI for self-service visualization; provides Synapse Studio for SQL-based ad-hoc analytics.	Limited built-in visualization capabilities compared to dedicated analytics platforms.
+Amazon Redshift	Yes	Moderate	Supports self-service analytics through QuickSight integration; offers SQL-based queries for ad-hoc analysis.	QuickSight features are basic compared to Tableau or Power BI, limiting advanced self-service capabilities.
