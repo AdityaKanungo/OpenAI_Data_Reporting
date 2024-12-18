@@ -1,7 +1,7 @@
-Platform	Real-Time Support	Rating	Technical Details	Disadvantage
-Snowflake	Yes	Moderate	Supports real-time ingestion using Snowpipe and Snowpipe Streaming; optimized for semi-structured data (JSON, Parquet).	Primarily optimized for batch processing; streaming can have higher latencies compared to alternatives.
-Databricks	Yes	High	Built on Apache Spark, provides Structured Streaming; excels in real-time processing for both batch and stream data.	Higher cost for real-time workloads due to compute-intensive Spark architecture.
-Google BigQuery	Yes	High	Real-time ingestion via Streaming API; integrates with Pub/Sub and Dataflow for low-latency analytics.	Streaming ingestion incurs extra costs, and schema changes require downtime.
-Oracle Autonomous DB	Yes	High	Real-time ingestion with automated optimization; supports complex analytics with ML-driven automation and scalability.	Complex setup for integrations with non-Oracle tools or external platforms.
-Azure Synapse	Yes	Moderate	Integrates with Azure Stream Analytics; best suited for batch workloads but configurable for real-time scenarios.	Higher latency for real-time streaming compared to Databricks or BigQuery; requires manual tuning.
-Amazon Redshift	Yes	Moderate	Uses Kinesis Firehose for near real-time ingestion; requires additional configurations for low-latency performance.	Limited native real-time capabilities; heavily reliant on external tools for real-time processing.
+Platform	Data Sharing Support	Rating	Technical Details	Disadvantage
+Snowflake	Yes	High	Supports secure data sharing without data duplication using Data Sharing and Data Clean Rooms. Shares data across accounts and clouds.	Limited to Snowflake accounts; cross-platform sharing requires additional setup or ETL processes.
+Databricks	Yes	Moderate	Data sharing via Delta Sharing, an open protocol for secure sharing of Delta Lake tables; supports cross-platform sharing.	Limited adoption of Delta Sharing; not as seamless as Snowflake for multi-cloud environments.
+Google BigQuery	Yes	High	Offers BigQuery Omni for cross-cloud sharing and dataset-level sharing with detailed access controls.	Sharing between non-Google platforms requires additional configurations and cost implications.
+Oracle Autonomous DB	Yes	Moderate	Data sharing supported within the Oracle ecosystem using Data Pump and Oracle GoldenGate for replication.	Lacks seamless multi-cloud sharing; heavily tied to Oracle products.
+Azure Synapse	Yes	Moderate	Enables sharing via Azure Data Share, allowing secure sharing with Azure services and external accounts.	Limited to Azure ecosystem; cross-cloud sharing can be cumbersome.
+Amazon Redshift	Yes	Moderate	Data sharing through Redshift Data Sharing, allowing near real-time sharing across clusters in the same AWS account.	Restricted to same-region or account sharing; cross-platform or multi-cloud sharing requires ETL.
