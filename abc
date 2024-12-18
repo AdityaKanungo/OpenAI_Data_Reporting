@@ -1,11 +1,1 @@
-latform	RBAC Support	Rating	Technical Details	Disadvantage
-Snowflake	Yes	High	Implements a comprehensive RBAC system allowing the creation of custom roles with specific privileges. Supports hierarchical role structures for granular access control.
-Snowflake Docs
-	Complex role hierarchies can become challenging to manage without proper planning and documentation.
-Databricks	Yes	Moderate	Provides RBAC through integration with cloud provider identity and access management (IAM) systems. Allows assignment of roles and permissions at workspace and cluster levels.	Lacks native, fine-grained RBAC features; relies heavily on external IAM systems for detailed access control.
-Google BigQuery	Yes	High	Utilizes Google Cloud IAM to manage access, offering predefined roles and the ability to create custom roles for specific permissions. Supports fine-grained access control at the dataset and table levels.	Managing permissions across multiple projects and datasets can become complex, especially in large organizations.
-Oracle Autonomous DB	Yes	High	Offers robust RBAC capabilities with the ability to define roles and assign privileges at various levels, including table, schema, and database. Supports integration with enterprise identity management systems.	Complexity in managing roles and privileges can increase with the scale of the database and number of users.
-Azure Synapse	Yes	High	Provides RBAC through Azure Synapse RBAC roles, allowing assignment of roles at different scopes such as workspace, SQL pool, and integration runtime. Integrates with Azure Active Directory for centralized identity management.
-Microsoft Learn
-	Role assignments can become complex in environments with numerous resources and users, requiring careful management.
-Amazon Redshift	Yes	Moderate	Supports RBAC by allowing the creation of user-defined roles and assigning privileges at the database, schema, and table levels. Integrates with AWS IAM for managing user access.	Lacks some advanced RBAC features found in other platforms, such as attribute-based access control, limiting flexibility in complex scenarios.
+Oracle-native tools like Data Pump, GoldenGate, and SQL Developer simplify migration with full compatibility for Oracle workloads.	Migration may be costlier due to Oracle’s proprietary licensing and cloud pricing models.
