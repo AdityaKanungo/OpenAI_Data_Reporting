@@ -1,7 +1,11 @@
-Platform	Row-Level Security Support	Column-Level Security Support	Rating	Technical Details	Disadvantage
-Snowflake	Yes	Yes	High	Implements Row Access Policies to enforce row-level security and Dynamic Data Masking for column-level security.	Complex policies can become challenging to manage in large-scale deployments.
-Databricks	Yes	Yes	Moderate	Supports row-level and column-level security through ACLs (Access Control Lists) and table permissions.	Granular access control requires manual configuration, increasing administrative overhead.
-Google BigQuery	Yes	Yes	High	Provides Row-Level Security policies and Column-Level Security using policy tags and access controls.	Policy management can be complex when dealing with large numbers of tables and datasets.
-Oracle Autonomous DB	Yes	Yes	High	Utilizes Virtual Private Database (VPD) for row-level security and Oracle Label Security (OLS) for column-level security.	Configuration complexity may require specialized DBA skills for effective implementation.
-Azure Synapse	Yes	Yes	High	Employs Row-Level Security (RLS) and Dynamic Data Masking (DDM) for column-level security within SQL pools.	Limited support for certain data sources may necessitate additional configurations.
-Amazon Redshift	Yes	Yes	Moderate	Implements Row-Level Security through SQL-based policies and Column-Level Security via GRANT and REVOKE statements.	Manual policy management can be error-prone and lacks automation features present in other platforms.
+latform	RBAC Support	Rating	Technical Details	Disadvantage
+Snowflake	Yes	High	Implements a comprehensive RBAC system allowing the creation of custom roles with specific privileges. Supports hierarchical role structures for granular access control.
+Snowflake Docs
+	Complex role hierarchies can become challenging to manage without proper planning and documentation.
+Databricks	Yes	Moderate	Provides RBAC through integration with cloud provider identity and access management (IAM) systems. Allows assignment of roles and permissions at workspace and cluster levels.	Lacks native, fine-grained RBAC features; relies heavily on external IAM systems for detailed access control.
+Google BigQuery	Yes	High	Utilizes Google Cloud IAM to manage access, offering predefined roles and the ability to create custom roles for specific permissions. Supports fine-grained access control at the dataset and table levels.	Managing permissions across multiple projects and datasets can become complex, especially in large organizations.
+Oracle Autonomous DB	Yes	High	Offers robust RBAC capabilities with the ability to define roles and assign privileges at various levels, including table, schema, and database. Supports integration with enterprise identity management systems.	Complexity in managing roles and privileges can increase with the scale of the database and number of users.
+Azure Synapse	Yes	High	Provides RBAC through Azure Synapse RBAC roles, allowing assignment of roles at different scopes such as workspace, SQL pool, and integration runtime. Integrates with Azure Active Directory for centralized identity management.
+Microsoft Learn
+	Role assignments can become complex in environments with numerous resources and users, requiring careful management.
+Amazon Redshift	Yes	Moderate	Supports RBAC by allowing the creation of user-defined roles and assigning privileges at the database, schema, and table levels. Integrates with AWS IAM for managing user access.	Lacks some advanced RBAC features found in other platforms, such as attribute-based access control, limiting flexibility in complex scenarios.
