@@ -7,6 +7,7 @@ Apologies for any earlier inaccuracies. Here's a more detailed and critical eval
 - **Rating of Support:** Moderate.
 
 - **Technical Details:** Snowflake offers Snowpipe for continuous data ingestion, enabling near real-time analytics. Snowpipe is optimized for semi-structured data formats such as JSON, Avro, and Parquet, allowing for flexible data processing. However, achieving low-latency, real-time data ingestion may require additional configurations and optimizations. Snowflake's architecture is primarily optimized for batch processing, and while it can handle streaming data, it may not be as efficient as platforms specifically designed for real-time processing. Additionally, Snowpipe Streaming, a new data ingestion feature, allows users to write rowsets from streaming sources directly into Snowflake tables over HTTPS, without setting up a pipeline or using intermediary cloud storage. 
+https://docs.snowflake.com/en/user-guide/data-load-snowpipe-streaming-overview?utm_source=chatgpt.com
 
 **2. Databricks**
 
