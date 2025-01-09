@@ -1,149 +1,98 @@
-import tiktoken
-import os
-import re
-import json
-import time
-from openai import AzureOpenAI
+import openai
+import pandas as pd
 
-# Updated user prompt template with dynamic flow details
-user_prompt_template = """
-You will analyze multiple COBOL batch programs provided by the user.
-Identify all variables defined in the WORKING-STORAGE SECTION and LINKAGE SECTION,
-including their data types, initial values, and any descriptions or comments.
-Then trace how each variable is used, modified, or transformed throughout the PROCEDURE DIVISION.
+# Configure OpenAI API key
+openai.api_key = "your_openai_api_key"
 
-Here's the flow details for the batch programs:
-{flow_details}
+def validate_data_dictionary(data_dict_path, rules_text, output_path):
+    """
+    Validates the data dictionary against rules using OpenAI API.
 
-Please identify all the variables involved, their transformations, and how data flows from one program to the next.
-Capture all the necessary information to create a detailed understanding of each program's role in the batch processing flow.
-
-Provide the details in the following JSON format:
-
-{
-  "program_name": "name_of_the_program",
-  "start_sequence": "start_sequence_identifier",
-  "end_sequence": "end_sequence_identifier",
-  "interim_files": ["list_of_interim_files"],
-  "input_sources": ["input_files_if_any"],
-  "variables": [
-    {
-      "variable_name": "string",
-      "data_type": "string",
-      "initial_value": "string or null",
-      "description": "string or null"
-    }
-  ],
-  "transformations": [
-    {
-      "variable_name": "string",
-      "line_number": "integer",
-      "operation": "description of the transformation",
-      "logic": "explanation of the logic applied",
-      "affected_by": ["list of other variables influencing this transformation"]
-    }
-  ],
-  "output_destinations": ["list_of_output_files"]
-}
-"""
-
-system_prompt = """
-You are an expert COBOL code analyzer.
-Your task is to analyze each COBOL program provided by the user.
-You need to identify all variables defined in the WORKING-STORAGE SECTION and LINKAGE SECTION,
-including their data types, initial values, and any relevant descriptions or comments.
-Furthermore, you must track how each of these variables is used, modified, or transformed throughout the PROCEDURE DIVISION.
-Ensure you maintain the flow of data from one program to the next, retaining the linkage between programs based on their input and output.
-Your goal is to provide a comprehensive JSON output that captures each variable's complete lifecycle,
-from its initial definition to its final state, including any transformations, calculations, and dependencies, across all programs.
-"""
-
-# Helper functions
-def num_tokens_from_string(string: str, encoding_name: str) -> int:
-    encoding = tiktoken.get_encoding(encoding_name)
-    num_tokens = len(encoding.encode(string))
-    return num_tokens
-
-def remove_comments(cobol_code):
-    inline_comment_pattern = r'^.{6}[*$]'
-    cobol_code = re.sub(inline_comment_pattern, '', cobol_code, flags=re.MULTILINE)
-    return cobol_code
-
-def read_file(file: str) -> str:
-    with open(file, 'r', encoding='utf-8') as cobol_file:
-        contents = cobol_file.read()
-    return contents
-
-def analyze_cobol_code(contents, user_prompt, system_prompt):
-    user_prompt = user_prompt + contents
-    if num_tokens_from_string(user_prompt, 'cl100k_base') < 300000:
-        response = client.chat.completions.create(
-            model = deployment_name,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.2
-        )
-        return response.choices[0].message.content
-    else:
-        print(f"File is too large at {num_tokens_from_string(user_prompt, 'cl100k_base')} tokens")
-        return None
-
-def process_batch_files(batch_directory, output_directory, flow_details):
-    start_time = time.time()
-    os.chdir(batch_directory)
+    Parameters:
+        data_dict_path (str): Path to the input Excel file containing the data dictionary.
+        rules_text (str): Rules provided for validation.
+        output_path (str): Path to save the output Excel file with corrections.
+    """
+    # Load the data dictionary
+    data_dict = pd.read_excel(data_dict_path)
     
-    # Incorporate flow details into the user prompt
-    user_prompt_with_flow = user_prompt_template.format(flow_details=flow_details)
+    # Initialize an empty list to store corrections
+    corrections = []
 
-    # Process each COBOL program
-    batch_files = [f for f in os.listdir(batch_directory) if f.endswith('.txt')]
-    
-    consolidated_results = []
-
-    for batch_file in batch_files:
-        print(f"Processing file: {batch_file}")
+    # Iterate through each row of the data dictionary
+    for _, row in data_dict.iterrows():
+        row_data = row.to_dict()
+        row_str = "\n".join([f"{key}: {value}" for key, value in row_data.items()])
         
-        # Read and clean the COBOL code
-        file_contents = read_file(batch_file)
-        cobol_code = remove_comments(file_contents)
-        
-        # Analyze the code with LLM using the updated user prompt
-        analysis_result = analyze_cobol_code(cobol_code, user_prompt_with_flow, system_prompt)
+        # Construct the OpenAI prompt
+        prompt = f"""
+        Validate the following data dictionary entry based on the provided rules:
 
-        if analysis_result:
-            try:
-                # Parse the result as JSON and add to consolidated results
-                analysis_json = json.loads(analysis_result)
-                consolidated_results.append(analysis_json)
-                
-                # Save individual program's JSON output
-                json_filename = os.path.join(output_directory, f"{batch_file.split('.')[0]}_analysis.json")
-                with open(json_filename, "w", encoding='utf-8') as json_file:
-                    json.dump(analysis_json, json_file, indent=4)
-                print(f"Analysis successfully saved to {json_filename}")
-                
-            except json.JSONDecodeError:
-                print(f"Error: The response from OpenAI was not in the expected JSON format for {batch_file}")
+        Rules:
+        {rules_text}
 
-    # Save the consolidated JSON output for all programs
-    consolidated_filename = os.path.join(output_directory, "consolidated_analysis.json")
-    with open(consolidated_filename, "w", encoding='utf-8') as consolidated_file:
-        json.dump(consolidated_results, consolidated_file, indent=4)
-    
-    print(f"Consolidated JSON output saved to {consolidated_filename}")
-    print(f"Processing completed in {time.time() - start_time} seconds.")
+        Data Dictionary Entry:
+        {row_str}
 
-# Define your input and output directories and flow details
-batch_directory = r"path\to\batch_files"  # Update this path
-output_directory = r"path\to\output_files"  # Update this path
-flow_details = """
-CIT23MS (Starting point) -> CIT25MS & CIT28MS
-CIT25MS & CIT28MS -> CIT22MS
-CIT22MS -> TNF23MS -> TNF22MS (Final_output)
+        Identify any inconsistencies, errors, or gaps, and suggest corrections.
+        Only provide the corrections in a structured format.
+        """
+
+        # Call the OpenAI API
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are a schema validation assistant."},
+                    {"role": "user", "content": prompt},
+                ],
+            )
+            correction = response['choices'][0]['message']['content'].strip()
+            corrections.append({"Row": row_data, "Correction": correction})
+        except Exception as e:
+            corrections.append({"Row": row_data, "Correction": f"Error: {e}"})
+
+    # Save corrections to an Excel file
+    corrections_df = pd.DataFrame(corrections)
+    corrections_df.to_excel(output_path, index=False)
+
+# Rules text from the uploaded images
+rules_text = """
+1. Any word in Table/Column name which is more than 10 characters should be abbreviated and must get approval from BIS DA.
+2. Table/Column names should be singular.
+3. Table names must be readable from left to right (e.g., Provider Location -> PROVR_LOC).
+4. Column names must be readable from right to left (e.g., Provide Location Identifier -> IDN_LOC_PROVR).
+5. The first three characters of a column name should be a class word (list provided in Classword sheet).
+6. Approved abbreviations are available at https://dhhsintra.dpw.state.pa.us/datadictionary/DataAbbr.aspx.
+7. Table/Column names must not exceed 50 characters.
+
+Modernization Rules:
+8. Table names must be readable from left to right (e.g., Provider Location -> ProviderLocation).
+9. Column names must be readable from right to left (e.g., Provide Location Identifier -> ProviderLocationIdentifier).
+
+Additional QA Checks:
+10. Table names must start with "T_" and must only use approved abbreviations.
+11. English names should be spelled out in full.
+12. Table descriptions must include:
+    - Type of data it stores
+    - Source of the data
+    - Data granularity
+    - Data load frequency and strategy (e.g., truncate reload or incremental).
+13. Column descriptions must match the column names.
+14. Foreign key (FK) columns should end with `_FK` and must include the related dimension table in the description.
+15. Column starting with `CDE` must have equivalent columns starting with `NAM` (e.g., CDE_ERROR -> NAM_ERROR).
+16. Data types such as Number/Varchar must include precision, and they cannot be blank.
+17. Columns should have either `NULL` or `NOT NULL`.
+18. Descriptions must not be identical for different column names.
+
+Spell Checks:
+19. Ensure all abbreviations and acronyms are spelled out unless explicitly approved.
+20. Subtype abbreviations must use `SBTYP` instead of `TYPE_SUB`.
 """
 
-# Run the processing function
-if __name__ == "__main__":
-    process_batch_files(batch_directory, output_directory, flow_details)
+# Paths to input and output files
+data_dict_path = "data_dictionary.xlsx"  # Replace with your input file path
+output_path = "data_dictionary_corrections.xlsx"  # Replace with your output file path
+
+# Run the validation
+validate_data_dictionary(data_dict_path, rules_text, output_path)
