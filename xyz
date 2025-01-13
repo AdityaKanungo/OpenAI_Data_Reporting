@@ -1,89 +1,151 @@
-DOMAIN RULES
-============
+import os
+import openai
+import pandas as pd
 
-[1] TABLE RULES
----------------
-1. Prefix:
-   - Table names must start with "T_". Example: T_PROVR_LOC.
+def load_data_dictionary(excel_path: str) -> pd.DataFrame:
+    """
+    Loads the data dictionary from an Excel file into a pandas DataFrame.
+    """
+    return pd.read_excel(excel_path)
 
-2. Approved Abbreviations:
-   - Only use organization-approved abbreviations.
+def load_rules_txt(rules_txt_path: str) -> str:
+    """
+    Loads the entire domain rules from a text file.
+    """
+    with open(rules_txt_path, 'r', encoding='utf-8') as f:
+        return f.read()
 
-3. Singular Form:
-   - Table names should be singular (e.g., T_PROVR_LOC not T_PROVRS_LOCS).
+def load_abbreviations(abbreviations_csv_path: str) -> pd.DataFrame:
+    """
+    Loads abbreviations from a CSV file. 
+    Expects columns: [word, abbreviation].
+    """
+    return pd.read_csv(abbreviations_csv_path)
 
-4. English Name:
-   - The “English Name” must spell out the table concept (e.g., "Provider Location" for T_PROVR_LOC).
+def chunk_abbreviations(df_abbr: pd.DataFrame, chunk_size: int = 500):
+    """
+    Splits abbreviations into smaller chunks to avoid hitting token limits.
+    """
+    records = df_abbr.to_dict(orient='records')
+    for i in range(0, len(records), chunk_size):
+        yield records[i:i + chunk_size]
 
-5. Left-to-Right Assembly:
-   - Table names are formed left to right. ("Provider Location" → T_PROVR_LOC)
+def generate_prompt_from_txt_rules(row_data: dict, rules_text: str, abbreviations_list: list) -> str:
+    """
+    Incorporates text-based domain rules, plus abbreviations, into the prompt.
+    """
+    abbreviations_text = "\n".join([
+        f"{item['word']} -> {item['abbreviation']}" for item in abbreviations_list
+    ])
+    
+    prompt = f"""
+You are a data dictionary validation assistant. 
+Apply the following domain rules strictly:
+---
+{rules_text}
+---
 
-6. Description Requirements:
-   - Must include the kind of data stored, data source, data granularity, frequency of data loads, and data load strategy (truncate vs. incremental).
+Here is a list of relevant abbreviations for this batch:
+{abbreviations_text}
 
-7. Maximum Length:
-   - Table name and English name must not exceed 50 characters.
+Please review the following data dictionary row:
 
-[2] COLUMN RULES
-----------------
-1. Right-to-Left Assembly:
-   - Column names are formed right to left. ("Provider Location Identifier" → IDN_LOC_PROVR)
+ACD: {row_data.get('ACD', '')}
+Schema: {row_data.get('Schema', '')}
+Table Name: {row_data.get('Table Name', '')}
+Column Name: {row_data.get('Column Name', '')}
+Data Type: {row_data.get('Data Type', '')}
+Precision: {row_data.get('Precision', '')}
+Scale: {row_data.get('Scale', '')}
+Nullable?: {row_data.get('Nullable ?', '')}
+Default Value: {row_data.get('Default value', '')}
+Description/Business Rules: {row_data.get('Description/Business Rules', '')}
+Is PK?: {row_data.get('Is PK (YES/NO)', '')}
+Is FK?: {row_data.get('Is FK?(YES/NO)', '')}
+Reference Table?: {row_data.get('Reference Table(YES/NO)', '')}
 
-2. Classword Prefix:
-   - The first 3 characters must be a classword (e.g., IDN_, CDE_, DTE_).
+Task:
+1) Identify any violations of the naming rules (e.g., length > 10, incorrect abbreviations, missing class words, etc.).
+2) Suggest corrected naming if needed.
+3) Indicate pass/fail and reason.
 
-3. Approved Abbreviations:
-   - Any word >10 characters must be abbreviated using approved abbreviations.
+Return your response in JSON:
+{{
+    "compliance": "PASS" or "FAIL",
+    "reasons": ["..."],
+    "suggested_table_name": "...",
+    "suggested_column_name": "...",
+    "other_corrections": "...",
+    "notes": "..."
+}}
+    """
+    return prompt
 
-4. Singular Form:
-   - Column names should be singular (e.g., LOC_PROVR not LOCS_PROVR).
+def call_openai_api(prompt: str, model: str = "gpt-3.5-turbo") -> dict:
+    try:
+        response = openai.ChatCompletion.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            max_tokens=500
+        )
+        content = response['choices'][0]['message']['content']
+        # Attempt JSON parsing
+        import json
+        try:
+            result = json.loads(content)
+        except json.JSONDecodeError:
+            result = {"raw_response": content}
+        return result
+    except Exception as e:
+        return {"error": str(e)}
 
-5. Spelling:
-   - Use correct spelling in both column names and descriptions.
+def validate_row(row: pd.Series, rules_text: str, abbr_df: pd.DataFrame) -> dict:
+    row_data = row.to_dict()
+    for abbr_chunk in chunk_abbreviations(abbr_df, chunk_size=200):
+        prompt = generate_prompt_from_txt_rules(row_data, rules_text, abbr_chunk)
+        gpt_result = call_openai_api(prompt, model="gpt-4")  # or "gpt-3.5-turbo"
+        
+        if "compliance" in gpt_result:
+            return gpt_result
+    return {"compliance": "UNKNOWN", "notes": "No structured response received"}
 
-6. Maximum Length:
-   - Column name must not exceed 50 characters.
+def process_data_dictionary(df: pd.DataFrame, rules_text: str, abbr_df: pd.DataFrame) -> pd.DataFrame:
+    results_list = []
+    for idx, row in df.iterrows():
+        validation_result = validate_row(row, rules_text, abbr_df)
+        # Combine original row info + GPT output
+        results_list.append({
+            "RowID": idx,
+            "Original_TableName": row.get("Table Name", ""),
+            "Original_ColumnName": row.get("Column Name", ""),
+            "Compliance": validation_result.get("compliance", "UNKNOWN"),
+            "Reasons": validation_result.get("reasons", []),
+            "Suggested_TableName": validation_result.get("suggested_table_name", ""),
+            "Suggested_ColumnName": validation_result.get("suggested_column_name", ""),
+            "Other_Corrections": validation_result.get("other_corrections", ""),
+            "Notes": validation_result.get("notes", "")
+        })
+    return pd.DataFrame(results_list)
 
-[3] PRIMARY KEY / FOREIGN KEY
------------------------------
-1. PK & FK Naming:
-   - If Is PK? = YES or Is FK? = YES, column name should start with IDN_ (e.g., IDN_EDW).
+def main():
+    openai.api_key = os.getenv("OPENAI_API_KEY", "YOUR_API_KEY")
 
-2. FK Descriptions:
-   - If Is FK? = YES, the description must state which dimension/reference table it points to.
+    excel_path = "data/data_dictionary.xlsx"
+    rules_txt_path = "data/domain_rules.txt"
+    abbreviations_csv_path = "data/abbreviations.csv"
 
-3. Distinct Descriptions:
-   - Similar FKs with different numbers cannot share the same description (e.g., IDN_EDW_01 vs. IDN_EDW_02).
+    # Load Data
+    df_dict = load_data_dictionary(excel_path)
+    rules_text = load_rules_txt(rules_txt_path)
+    df_abbr = load_abbreviations(abbreviations_csv_path)
 
-[4] DATA TYPE / PRECISION
--------------------------
-1. Number/Varchar Precision:
-   - If a column is NUMBER or VARCHAR, Precision cannot be blank.
+    # Validate
+    result_df = process_data_dictionary(df_dict, rules_text, df_abbr)
 
-2. NULL vs. NOT NULL:
-   - Must explicitly state whether the column is NULL or NOT NULL (no blank default).
+    # Export to Excel
+    result_df.to_excel("validation_report.xlsx", index=False)
+    print("Validation complete. Results saved to 'validation_report.xlsx'")
 
-[5] ADDITIONAL NAMING CONSISTENCY
----------------------------------
-1. Parallel NAM Columns:
-   - If a column name starts with CDE_, there must be a matching NAM_ column.
-   - Example pairs:
-       - CDE_ERROR ↔ NAM_ERROR
-       - CDE_TYPE_ENC ↔ NAM_TYPE_ENC
-
-[6] DESCRIPTIONS
-----------------
-1. Unique Descriptions:
-   - Columns with different names must not have the same exact description.
-
-2. Clarity:
-   - Descriptions should be detailed enough to explain business meaning, especially for FKs/relationships.
-
-[7] EXAMPLES
-------------
-- Effective Dates:
-   - Instead of DTE_EFFV_BEGIN / DTE_EFFV_END, use DTE_BEGIN_EFFV / DTE_END_EFFV.
-
-- Traditional Format:
-   - Table: "Provider Location" → T_PROVR_LOC
-   - Column: "Provider Location Identifier" → IDN_LOC_PROVR
+if __name__ == "__main__":
+    main()
