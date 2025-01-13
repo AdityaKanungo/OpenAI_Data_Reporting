@@ -82,6 +82,9 @@ Return your response in JSON:
     return prompt
 
 def call_openai_api(prompt: str, model: str = "gpt-3.5-turbo") -> dict:
+    """
+    Calls the OpenAI ChatCompletion API with the given prompt.
+    """
     try:
         response = openai.ChatCompletion.create(
             model=model,
@@ -101,34 +104,57 @@ def call_openai_api(prompt: str, model: str = "gpt-3.5-turbo") -> dict:
         return {"error": str(e)}
 
 def validate_row(row: pd.Series, rules_text: str, abbr_df: pd.DataFrame) -> dict:
+    """
+    Validates a single row by:
+      - Chunking abbreviations if needed (to avoid token limit).
+      - Generating a prompt and calling OpenAI for each chunk until we get a structured response.
+    """
     row_data = row.to_dict()
     for abbr_chunk in chunk_abbreviations(abbr_df, chunk_size=200):
         prompt = generate_prompt_from_txt_rules(row_data, rules_text, abbr_chunk)
-        gpt_result = call_openai_api(prompt, model="gpt-4")  # or "gpt-3.5-turbo"
+        # You can switch to gpt-4 if you prefer
+        gpt_result = call_openai_api(prompt, model="gpt-3.5-turbo")
         
         if "compliance" in gpt_result:
             return gpt_result
     return {"compliance": "UNKNOWN", "notes": "No structured response received"}
 
-def process_data_dictionary(df: pd.DataFrame, rules_text: str, abbr_df: pd.DataFrame) -> pd.DataFrame:
+def chunk_dataframe(df: pd.DataFrame, chunk_size: int = 10):
+    """
+    Yields consecutive chunks of the given DataFrame, each with 'chunk_size' rows.
+    """
+    for start in range(0, len(df), chunk_size):
+        end = start + chunk_size
+        yield df.iloc[start:end]
+
+def process_data_dictionary(df: pd.DataFrame, rules_text: str, abbr_df: pd.DataFrame, chunk_size: int = 10) -> pd.DataFrame:
+    """
+    Processes the data dictionary in chunks of 'chunk_size' rows, validating each row.
+    """
     results_list = []
-    for idx, row in df.iterrows():
-        validation_result = validate_row(row, rules_text, abbr_df)
-        # Combine original row info + GPT output
-        results_list.append({
-            "RowID": idx,
-            "Original_TableName": row.get("Table Name", ""),
-            "Original_ColumnName": row.get("Column Name", ""),
-            "Compliance": validation_result.get("compliance", "UNKNOWN"),
-            "Reasons": validation_result.get("reasons", []),
-            "Suggested_TableName": validation_result.get("suggested_table_name", ""),
-            "Suggested_ColumnName": validation_result.get("suggested_column_name", ""),
-            "Other_Corrections": validation_result.get("other_corrections", ""),
-            "Notes": validation_result.get("notes", "")
-        })
+    for chunk_index, df_chunk in enumerate(chunk_dataframe(df, chunk_size)):
+        print(f"Processing chunk {chunk_index+1} (rows {df_chunk.index[0]} to {df_chunk.index[-1]})...")
+        
+        # Validate each row in this chunk
+        for idx, row in df_chunk.iterrows():
+            validation_result = validate_row(row, rules_text, abbr_df)
+            # Combine original row info + GPT output
+            results_list.append({
+                "RowID": idx,
+                "Original_TableName": row.get("Table Name", ""),
+                "Original_ColumnName": row.get("Column Name", ""),
+                "Compliance": validation_result.get("compliance", "UNKNOWN"),
+                "Reasons": validation_result.get("reasons", []),
+                "Suggested_TableName": validation_result.get("suggested_table_name", ""),
+                "Suggested_ColumnName": validation_result.get("suggested_column_name", ""),
+                "Other_Corrections": validation_result.get("other_corrections", ""),
+                "Notes": validation_result.get("notes", "")
+            })
+    
     return pd.DataFrame(results_list)
 
 def main():
+    # Load OpenAI API key from environment or fallback
     openai.api_key = os.getenv("OPENAI_API_KEY", "YOUR_API_KEY")
 
     excel_path = "data/data_dictionary.xlsx"
@@ -140,8 +166,8 @@ def main():
     rules_text = load_rules_txt(rules_txt_path)
     df_abbr = load_abbreviations(abbreviations_csv_path)
 
-    # Validate
-    result_df = process_data_dictionary(df_dict, rules_text, df_abbr)
+    # Process validation in chunks of 10
+    result_df = process_data_dictionary(df_dict, rules_text, df_abbr, chunk_size=10)
 
     # Export to Excel
     result_df.to_excel("validation_report.xlsx", index=False)
