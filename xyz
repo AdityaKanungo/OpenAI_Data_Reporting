@@ -1,98 +1,89 @@
-import openai
-import pandas as pd
+DOMAIN RULES
+============
 
-# Configure OpenAI API key
-openai.api_key = "your_openai_api_key"
+[1] TABLE RULES
+---------------
+1. Prefix:
+   - Table names must start with "T_". Example: T_PROVR_LOC.
 
-def validate_data_dictionary(data_dict_path, rules_text, output_path):
-    """
-    Validates the data dictionary against rules using OpenAI API.
+2. Approved Abbreviations:
+   - Only use organization-approved abbreviations.
 
-    Parameters:
-        data_dict_path (str): Path to the input Excel file containing the data dictionary.
-        rules_text (str): Rules provided for validation.
-        output_path (str): Path to save the output Excel file with corrections.
-    """
-    # Load the data dictionary
-    data_dict = pd.read_excel(data_dict_path)
-    
-    # Initialize an empty list to store corrections
-    corrections = []
+3. Singular Form:
+   - Table names should be singular (e.g., T_PROVR_LOC not T_PROVRS_LOCS).
 
-    # Iterate through each row of the data dictionary
-    for _, row in data_dict.iterrows():
-        row_data = row.to_dict()
-        row_str = "\n".join([f"{key}: {value}" for key, value in row_data.items()])
-        
-        # Construct the OpenAI prompt
-        prompt = f"""
-        Validate the following data dictionary entry based on the provided rules:
+4. English Name:
+   - The “English Name” must spell out the table concept (e.g., "Provider Location" for T_PROVR_LOC).
 
-        Rules:
-        {rules_text}
+5. Left-to-Right Assembly:
+   - Table names are formed left to right. ("Provider Location" → T_PROVR_LOC)
 
-        Data Dictionary Entry:
-        {row_str}
+6. Description Requirements:
+   - Must include the kind of data stored, data source, data granularity, frequency of data loads, and data load strategy (truncate vs. incremental).
 
-        Identify any inconsistencies, errors, or gaps, and suggest corrections.
-        Only provide the corrections in a structured format.
-        """
+7. Maximum Length:
+   - Table name and English name must not exceed 50 characters.
 
-        # Call the OpenAI API
-        try:
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are a schema validation assistant."},
-                    {"role": "user", "content": prompt},
-                ],
-            )
-            correction = response['choices'][0]['message']['content'].strip()
-            corrections.append({"Row": row_data, "Correction": correction})
-        except Exception as e:
-            corrections.append({"Row": row_data, "Correction": f"Error: {e}"})
+[2] COLUMN RULES
+----------------
+1. Right-to-Left Assembly:
+   - Column names are formed right to left. ("Provider Location Identifier" → IDN_LOC_PROVR)
 
-    # Save corrections to an Excel file
-    corrections_df = pd.DataFrame(corrections)
-    corrections_df.to_excel(output_path, index=False)
+2. Classword Prefix:
+   - The first 3 characters must be a classword (e.g., IDN_, CDE_, DTE_).
 
-# Rules text from the uploaded images
-rules_text = """
-1. Any word in Table/Column name which is more than 10 characters should be abbreviated and must get approval from BIS DA.
-2. Table/Column names should be singular.
-3. Table names must be readable from left to right (e.g., Provider Location -> PROVR_LOC).
-4. Column names must be readable from right to left (e.g., Provide Location Identifier -> IDN_LOC_PROVR).
-5. The first three characters of a column name should be a class word (list provided in Classword sheet).
-6. Approved abbreviations are available at https://dhhsintra.dpw.state.pa.us/datadictionary/DataAbbr.aspx.
-7. Table/Column names must not exceed 50 characters.
+3. Approved Abbreviations:
+   - Any word >10 characters must be abbreviated using approved abbreviations.
 
-Modernization Rules:
-8. Table names must be readable from left to right (e.g., Provider Location -> ProviderLocation).
-9. Column names must be readable from right to left (e.g., Provide Location Identifier -> ProviderLocationIdentifier).
+4. Singular Form:
+   - Column names should be singular (e.g., LOC_PROVR not LOCS_PROVR).
 
-Additional QA Checks:
-10. Table names must start with "T_" and must only use approved abbreviations.
-11. English names should be spelled out in full.
-12. Table descriptions must include:
-    - Type of data it stores
-    - Source of the data
-    - Data granularity
-    - Data load frequency and strategy (e.g., truncate reload or incremental).
-13. Column descriptions must match the column names.
-14. Foreign key (FK) columns should end with `_FK` and must include the related dimension table in the description.
-15. Column starting with `CDE` must have equivalent columns starting with `NAM` (e.g., CDE_ERROR -> NAM_ERROR).
-16. Data types such as Number/Varchar must include precision, and they cannot be blank.
-17. Columns should have either `NULL` or `NOT NULL`.
-18. Descriptions must not be identical for different column names.
+5. Spelling:
+   - Use correct spelling in both column names and descriptions.
 
-Spell Checks:
-19. Ensure all abbreviations and acronyms are spelled out unless explicitly approved.
-20. Subtype abbreviations must use `SBTYP` instead of `TYPE_SUB`.
-"""
+6. Maximum Length:
+   - Column name must not exceed 50 characters.
 
-# Paths to input and output files
-data_dict_path = "data_dictionary.xlsx"  # Replace with your input file path
-output_path = "data_dictionary_corrections.xlsx"  # Replace with your output file path
+[3] PRIMARY KEY / FOREIGN KEY
+-----------------------------
+1. PK & FK Naming:
+   - If Is PK? = YES or Is FK? = YES, column name should start with IDN_ (e.g., IDN_EDW).
 
-# Run the validation
-validate_data_dictionary(data_dict_path, rules_text, output_path)
+2. FK Descriptions:
+   - If Is FK? = YES, the description must state which dimension/reference table it points to.
+
+3. Distinct Descriptions:
+   - Similar FKs with different numbers cannot share the same description (e.g., IDN_EDW_01 vs. IDN_EDW_02).
+
+[4] DATA TYPE / PRECISION
+-------------------------
+1. Number/Varchar Precision:
+   - If a column is NUMBER or VARCHAR, Precision cannot be blank.
+
+2. NULL vs. NOT NULL:
+   - Must explicitly state whether the column is NULL or NOT NULL (no blank default).
+
+[5] ADDITIONAL NAMING CONSISTENCY
+---------------------------------
+1. Parallel NAM Columns:
+   - If a column name starts with CDE_, there must be a matching NAM_ column.
+   - Example pairs:
+       - CDE_ERROR ↔ NAM_ERROR
+       - CDE_TYPE_ENC ↔ NAM_TYPE_ENC
+
+[6] DESCRIPTIONS
+----------------
+1. Unique Descriptions:
+   - Columns with different names must not have the same exact description.
+
+2. Clarity:
+   - Descriptions should be detailed enough to explain business meaning, especially for FKs/relationships.
+
+[7] EXAMPLES
+------------
+- Effective Dates:
+   - Instead of DTE_EFFV_BEGIN / DTE_EFFV_END, use DTE_BEGIN_EFFV / DTE_END_EFFV.
+
+- Traditional Format:
+   - Table: "Provider Location" → T_PROVR_LOC
+   - Column: "Provider Location Identifier" → IDN_LOC_PROVR
