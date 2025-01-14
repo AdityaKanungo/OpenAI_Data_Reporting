@@ -1,6 +1,7 @@
 import os
 import openai
 import pandas as pd
+import json
 
 def load_data_dictionary(excel_path: str) -> pd.DataFrame:
     """
@@ -15,27 +16,24 @@ def load_rules_txt(rules_txt_path: str) -> str:
     with open(rules_txt_path, 'r', encoding='utf-8') as f:
         return f.read()
 
-def load_abbreviations(abbreviations_csv_path: str) -> pd.DataFrame:
+def load_abbreviations(abbreviations_csv_path: str) -> dict:
     """
-    Loads abbreviations from a CSV file. 
+    Loads abbreviations from a CSV file as a Python dictionary.
     Expects columns: [word, abbreviation].
+    Returns a dict of {word: abbreviation}.
     """
-    return pd.read_csv(abbreviations_csv_path)
+    df_abbr = pd.read_csv(abbreviations_csv_path)
+    # Convert to { "Employee" : "EMP", "Number" : "NUM", ... }
+    abbr_dict = df_abbr.set_index("word")["abbreviation"].to_dict()
+    return abbr_dict
 
-def chunk_abbreviations(df_abbr: pd.DataFrame, chunk_size: int = 500):
+def generate_prompt_from_txt_rules(row_data: dict, rules_text: str, abbr_dict: dict) -> str:
     """
-    Splits abbreviations into smaller chunks to avoid hitting token limits.
+    Incorporates text-based domain rules, plus all abbreviations, into the prompt.
     """
-    records = df_abbr.to_dict(orient='records')
-    for i in range(0, len(records), chunk_size):
-        yield records[i:i + chunk_size]
-
-def generate_prompt_from_txt_rules(row_data: dict, rules_text: str, abbreviations_list: list) -> str:
-    """
-    Incorporates text-based domain rules, plus abbreviations, into the prompt.
-    """
+    # Build one big list of all abbreviations
     abbreviations_text = "\n".join([
-        f"{item['word']} -> {item['abbreviation']}" for item in abbreviations_list
+        f"{word} -> {abbr}" for word, abbr in abbr_dict.items()
     ])
     
     prompt = f"""
@@ -45,7 +43,7 @@ Apply the following domain rules strictly:
 {rules_text}
 ---
 
-Here is a list of relevant abbreviations for this batch:
+Here is a list of all known abbreviations in this domain:
 {abbreviations_text}
 
 Please review the following data dictionary row:
@@ -93,63 +91,82 @@ def call_openai_api(prompt: str, model: str = "gpt-3.5-turbo") -> dict:
             max_tokens=500
         )
         content = response['choices'][0]['message']['content']
-        # Attempt JSON parsing
-        import json
         try:
-            result = json.loads(content)
+            return json.loads(content)
         except json.JSONDecodeError:
-            result = {"raw_response": content}
-        return result
+            # If JSON parsing fails, return raw response
+            return {"raw_response": content}
     except Exception as e:
         return {"error": str(e)}
 
-def validate_row(row: pd.Series, rules_text: str, abbr_df: pd.DataFrame) -> dict:
+def validate_row(row: pd.Series, rules_text: str, abbr_dict: dict) -> dict:
     """
     Validates a single row by:
-      - Chunking abbreviations if needed (to avoid token limit).
-      - Generating a prompt and calling OpenAI for each chunk until we get a structured response.
+      1) Optionally do local checks for abbreviations.
+      2) Generate a prompt that includes domain rules & full abbreviation dictionary.
+      3) Call OpenAI with that prompt.
     """
     row_data = row.to_dict()
-    for abbr_chunk in chunk_abbreviations(abbr_df, chunk_size=200):
-        prompt = generate_prompt_from_txt_rules(row_data, rules_text, abbr_chunk)
-        # You can switch to gpt-4 if you prefer
-        gpt_result = call_openai_api(prompt, model="gpt-3.5-turbo")
-        
-        if "compliance" in gpt_result:
-            return gpt_result
-    return {"compliance": "UNKNOWN", "notes": "No structured response received"}
+    table_name = row_data.get("Table Name", "")
+    column_name = row_data.get("Column Name", "")
 
-def chunk_dataframe(df: pd.DataFrame, chunk_size: int = 10):
-    """
-    Yields consecutive chunks of the given DataFrame, each with 'chunk_size' rows.
-    """
-    for start in range(0, len(df), chunk_size):
-        end = start + chunk_size
-        yield df.iloc[start:end]
+    # --- EXAMPLE: Local check for valid abbreviations before LLM ---
+    # For demonstration, let's say each "word" in the table or column name must be in abbr_dict.values()
+    # or be an acceptable 'word' in abbr_dict.keys(). This is up to your naming standards:
+    
+    # Simple approach: check if table_name or column_name includes a known abbreviation
+    # (This is just an example logic — adapt to your real naming conventions)
+    invalid_abbr = []
+    
+    # Suppose table name is "EMP_NUM" => words: ["EMP", "NUM"]
+    # We check if each chunk is in abbr_dict.values() (the set of known abbreviations).
+    # Or if we store reversed keys in abbr_dict, you’d adapt accordingly.
+    for chunk in table_name.split("_"):
+        if chunk and (chunk not in abbr_dict.values()):
+            invalid_abbr.append(chunk)
+            
+    for chunk in column_name.split("_"):
+        if chunk and (chunk not in abbr_dict.values()):
+            invalid_abbr.append(chunk)
 
-def process_data_dictionary(df: pd.DataFrame, rules_text: str, abbr_df: pd.DataFrame, chunk_size: int = 10) -> pd.DataFrame:
+    # You can store the local check results in row_data so the LLM can see it if desired
+    row_data["Local Abbreviation Check"] = (
+        f"Invalid abbreviations found: {invalid_abbr}" if invalid_abbr else "All abbreviations OK"
+    )
+
+    # Now generate the prompt with everything included
+    prompt = generate_prompt_from_txt_rules(row_data, rules_text, abbr_dict)
+    
+    # Call the OpenAI API
+    gpt_result = call_openai_api(prompt, model="gpt-3.5-turbo")
+
+    # If the response does not contain the keys we want, fill in placeholders
+    if "compliance" not in gpt_result:
+        gpt_result["compliance"] = "UNKNOWN"
+        gpt_result["notes"] = gpt_result.get("raw_response", "")
+
+    return gpt_result
+
+def process_data_dictionary(df: pd.DataFrame, rules_text: str, abbr_dict: dict) -> pd.DataFrame:
     """
-    Processes the data dictionary in chunks of 'chunk_size' rows, validating each row.
+    Processes the data dictionary row-by-row, validating each row individually.
     """
     results_list = []
-    for chunk_index, df_chunk in enumerate(chunk_dataframe(df, chunk_size)):
-        print(f"Processing chunk {chunk_index+1} (rows {df_chunk.index[0]} to {df_chunk.index[-1]})...")
+    for idx, row in df.iterrows():
+        validation_result = validate_row(row, rules_text, abbr_dict)
         
-        # Validate each row in this chunk
-        for idx, row in df_chunk.iterrows():
-            validation_result = validate_row(row, rules_text, abbr_df)
-            # Combine original row info + GPT output
-            results_list.append({
-                "RowID": idx,
-                "Original_TableName": row.get("Table Name", ""),
-                "Original_ColumnName": row.get("Column Name", ""),
-                "Compliance": validation_result.get("compliance", "UNKNOWN"),
-                "Reasons": validation_result.get("reasons", []),
-                "Suggested_TableName": validation_result.get("suggested_table_name", ""),
-                "Suggested_ColumnName": validation_result.get("suggested_column_name", ""),
-                "Other_Corrections": validation_result.get("other_corrections", ""),
-                "Notes": validation_result.get("notes", "")
-            })
+        # Combine original row info + GPT output
+        results_list.append({
+            "RowID": idx,
+            "Original_TableName": row.get("Table Name", ""),
+            "Original_ColumnName": row.get("Column Name", ""),
+            "Compliance": validation_result.get("compliance", "UNKNOWN"),
+            "Reasons": validation_result.get("reasons", []),
+            "Suggested_TableName": validation_result.get("suggested_table_name", ""),
+            "Suggested_ColumnName": validation_result.get("suggested_column_name", ""),
+            "Other_Corrections": validation_result.get("other_corrections", ""),
+            "Notes": validation_result.get("notes", "")
+        })
     
     return pd.DataFrame(results_list)
 
@@ -164,10 +181,10 @@ def main():
     # Load Data
     df_dict = load_data_dictionary(excel_path)
     rules_text = load_rules_txt(rules_txt_path)
-    df_abbr = load_abbreviations(abbreviations_csv_path)
+    abbr_dict = load_abbreviations(abbreviations_csv_path)
 
-    # Process validation in chunks of 10
-    result_df = process_data_dictionary(df_dict, rules_text, df_abbr, chunk_size=10)
+    # Process validation row by row
+    result_df = process_data_dictionary(df_dict, rules_text, abbr_dict)
 
     # Export to Excel
     result_df.to_excel("validation_report.xlsx", index=False)
