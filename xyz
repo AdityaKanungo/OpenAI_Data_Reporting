@@ -1,194 +1,146 @@
-import os
-import openai
+import streamlit as st
 import pandas as pd
 import json
+import openai
+from typing import Dict, List, Any
 
-def load_data_dictionary(excel_path: str) -> pd.DataFrame:
-    """
-    Loads the data dictionary from an Excel file into a pandas DataFrame.
-    """
-    return pd.read_excel(excel_path)
+# ==============================
+# 1. DATA LOADING FUNCTIONS
+# ==============================
 
-def load_rules_txt(rules_txt_path: str) -> str:
-    """
-    Loads the entire domain rules from a text file.
-    """
-    with open(rules_txt_path, 'r', encoding='utf-8') as f:
-        return f.read()
+def load_data_dictionary(uploaded_file) -> pd.DataFrame:
+    """Loads the data dictionary from an uploaded Excel file."""
+    return pd.read_excel(uploaded_file)
 
-def load_abbreviations(abbreviations_csv_path: str) -> dict:
-    """
-    Loads abbreviations from a CSV file as a Python dictionary.
-    Expects columns: [word, abbreviation].
-    Returns a dict of {word: abbreviation}.
-    """
-    df_abbr = pd.read_csv(abbreviations_csv_path)
-    # Convert to { "Employee" : "EMP", "Number" : "NUM", ... }
-    abbr_dict = df_abbr.set_index("word")["abbreviation"].to_dict()
+def load_rules_txt(uploaded_file) -> str:
+    """Loads the domain rules from an uploaded text file."""
+    return uploaded_file.read().decode("utf-8")
+
+def load_abbreviations(uploaded_file) -> Dict[str, str]:
+    """Loads abbreviations from an uploaded CSV file and ensures proper formatting."""
+    df_abbr = pd.read_csv(uploaded_file)
+    df_abbr.columns = df_abbr.columns.str.strip()  # Trim spaces from column headers
+    df_abbr = df_abbr.applymap(lambda x: x.strip().upper() if isinstance(x, str) else x)  # Normalize text to uppercase
+    abbr_dict = df_abbr.set_index("ABBR")["NAME"].to_dict()  # Ensure lookup is done on 'ABBR'
     return abbr_dict
 
-def generate_prompt_from_txt_rules(row_data: dict, rules_text: str, abbr_dict: dict) -> str:
-    """
-    Incorporates text-based domain rules, plus all abbreviations, into the prompt.
-    """
-    # Build one big list of all abbreviations
-    abbreviations_text = "\n".join([
-        f"{word} -> {abbr}" for word, abbr in abbr_dict.items()
-    ])
-    
+def load_class_words(uploaded_file) -> List[str]:
+    """Loads class words from an uploaded CSV file."""
+    df_class = pd.read_csv(uploaded_file)
+    return df_class['CLASS WORDS'].str.strip().str.upper().tolist()
+
+def call_openai_suggestion(table_name: str, column_name: str, failure_reasons: str, rules_text: str, missing_abbr: List[str]) -> Dict[str, str]:
+    """Calls OpenAI API to suggest a corrected table and column name, ensuring non-abbreviations and valid abbreviations are retained."""
     prompt = f"""
-You are a data dictionary validation assistant. 
-Apply the following domain rules strictly:
----
-{rules_text}
----
-
-Here is a list of all known abbreviations in this domain:
-{abbreviations_text}
-
-Please review the following data dictionary row:
-
-ACD: {row_data.get('ACD', '')}
-Schema: {row_data.get('Schema', '')}
-Table Name: {row_data.get('Table Name', '')}
-Column Name: {row_data.get('Column Name', '')}
-Data Type: {row_data.get('Data Type', '')}
-Precision: {row_data.get('Precision', '')}
-Scale: {row_data.get('Scale', '')}
-Nullable?: {row_data.get('Nullable ?', '')}
-Default Value: {row_data.get('Default value', '')}
-Description/Business Rules: {row_data.get('Description/Business Rules', '')}
-Is PK?: {row_data.get('Is PK (YES/NO)', '')}
-Is FK?: {row_data.get('Is FK?(YES/NO)', '')}
-Reference Table?: {row_data.get('Reference Table(YES/NO)', '')}
-
-Task:
-1) Identify any violations of the naming rules (e.g., length > 10, incorrect abbreviations, missing class words, etc.).
-2) Suggest corrected naming if needed.
-3) Indicate pass/fail and reason.
-
-Return your response in JSON:
-{{
-    "compliance": "PASS" or "FAIL",
-    "reasons": ["..."],
-    "suggested_table_name": "...",
-    "suggested_column_name": "...",
-    "other_corrections": "...",
-    "notes": "..."
-}}
-    """
-    return prompt
-
-def call_openai_api(prompt: str, model: str = "gpt-3.5-turbo") -> dict:
-    """
-    Calls the OpenAI ChatCompletion API with the given prompt.
+    You are an expert in database table and column naming conventions.
+    Based on the following validation failure reasons and naming rules, suggest a corrected table and column name.
+    Ensure that non-abbreviation words remain unchanged in the column name.
+    If a word appears to be a complete word rather than an abbreviation, do not remove it.
+    If a word is already in the approved abbreviation list, do not remove or modify it.
+    
+    Table Name: {table_name}
+    Column Name: {column_name}
+    
+    Failure Reasons:
+    {failure_reasons}
+    
+    Naming Rules:
+    {rules_text}
+    
+    Words that should remain unchanged in the column name:
+    {', '.join(missing_abbr)}
+    
+    If the word HEADER (or similar full words) is flagged but does not appear to be an abbreviation, retain it in the column name and add a note stating: 'Although HEADER is not in the abbreviation list, it seems like a full word and has been kept.'
+    
+    Format the response as JSON:
+    {{
+      "Suggested Table Name": "{table_name}",
+      "Suggested Column Name": "{column_name}",
+      "Additional Notes": "If applicable, note why HEADER or similar words have been retained."
+    }}
     """
     try:
         response = openai.ChatCompletion.create(
-            model=model,
+            model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-            max_tokens=500
+            temperature=0
         )
-        content = response['choices'][0]['message']['content']
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            # If JSON parsing fails, return raw response
-            return {"raw_response": content}
+        return json.loads(response["choices"][0]["message"]["content"])
     except Exception as e:
-        return {"error": str(e)}
+        return {"Suggested Table Name": table_name, "Suggested Column Name": column_name, "Additional Notes": "N/A", "Error": str(e)}
 
-def validate_row(row: pd.Series, rules_text: str, abbr_dict: dict) -> dict:
-    """
-    Validates a single row by:
-      1) Optionally do local checks for abbreviations.
-      2) Generate a prompt that includes domain rules & full abbreviation dictionary.
-      3) Call OpenAI with that prompt.
-    """
-    row_data = row.to_dict()
-    table_name = row_data.get("Table Name", "")
-    column_name = row_data.get("Column Name", "")
-
-    # --- EXAMPLE: Local check for valid abbreviations before LLM ---
-    # For demonstration, let's say each "word" in the table or column name must be in abbr_dict.values()
-    # or be an acceptable 'word' in abbr_dict.keys(). This is up to your naming standards:
-    
-    # Simple approach: check if table_name or column_name includes a known abbreviation
-    # (This is just an example logic — adapt to your real naming conventions)
-    invalid_abbr = []
-    
-    # Suppose table name is "EMP_NUM" => words: ["EMP", "NUM"]
-    # We check if each chunk is in abbr_dict.values() (the set of known abbreviations).
-    # Or if we store reversed keys in abbr_dict, you’d adapt accordingly.
-    for chunk in table_name.split("_"):
-        if chunk and (chunk not in abbr_dict.values()):
-            invalid_abbr.append(chunk)
-            
-    for chunk in column_name.split("_"):
-        if chunk and (chunk not in abbr_dict.values()):
-            invalid_abbr.append(chunk)
-
-    # You can store the local check results in row_data so the LLM can see it if desired
-    row_data["Local Abbreviation Check"] = (
-        f"Invalid abbreviations found: {invalid_abbr}" if invalid_abbr else "All abbreviations OK"
-    )
-
-    # Now generate the prompt with everything included
-    prompt = generate_prompt_from_txt_rules(row_data, rules_text, abbr_dict)
-    
-    # Call the OpenAI API
-    gpt_result = call_openai_api(prompt, model="gpt-3.5-turbo")
-
-    # If the response does not contain the keys we want, fill in placeholders
-    if "compliance" not in gpt_result:
-        gpt_result["compliance"] = "UNKNOWN"
-        gpt_result["notes"] = gpt_result.get("raw_response", "")
-
-    return gpt_result
-
-def process_data_dictionary(df: pd.DataFrame, rules_text: str, abbr_dict: dict) -> pd.DataFrame:
-    """
-    Processes the data dictionary row-by-row, validating each row individually.
-    """
-    results_list = []
-    for idx, row in df.iterrows():
-        validation_result = validate_row(row, rules_text, abbr_dict)
+def validate_data_dictionary(df: pd.DataFrame, class_words: List[str], abbreviations: Dict[str, str], rules_text: str) -> pd.DataFrame:
+    """Validates the data dictionary based on the provided rules, class words, and abbreviations."""
+    results = []
+    for _, row in df.iterrows():
+        table_name = str(row.get('Table Name', '')).strip().upper()
+        column_name = str(row.get('Column Name', '')).strip().upper()
         
-        # Combine original row info + GPT output
-        results_list.append({
-            "RowID": idx,
-            "Original_TableName": row.get("Table Name", ""),
-            "Original_ColumnName": row.get("Column Name", ""),
-            "Compliance": validation_result.get("compliance", "UNKNOWN"),
-            "Reasons": validation_result.get("reasons", []),
-            "Suggested_TableName": validation_result.get("suggested_table_name", ""),
-            "Suggested_ColumnName": validation_result.get("suggested_column_name", ""),
-            "Other_Corrections": validation_result.get("other_corrections", ""),
-            "Notes": validation_result.get("notes", "")
+        table_valid = table_name.startswith('T') and (table_name.endswith('FACT') or table_name.endswith('DIM'))
+        column_prefix = column_name[:3]
+        column_remaining_parts = column_name[4:].split('_') if len(column_name) > 3 else []
+        
+        column_valid = column_prefix in class_words
+        
+        failure_reasons = []
+        if not table_valid:
+            failure_reasons.append("Table name must start with 'T' and end with 'FACT' or 'DIM'.")
+        if not column_valid:
+            failure_reasons.append(f"Column name must start with a valid class word. Found '{column_prefix}', which is not in the list.")
+        
+        missing_abbr = [part for part in column_remaining_parts if part not in abbreviations and part.isalpha()]
+        if missing_abbr:
+            failure_reasons.append(f"Unrecognized abbreviation(s): {', '.join(missing_abbr)} are not in the approved list.")
+        
+        validation_status = "PASS" if not failure_reasons else "FAIL"
+        
+        suggested_names = {"Suggested Table Name": table_name, "Suggested Column Name": column_name, "Additional Notes": "N/A"}
+        if validation_status == "FAIL":
+            suggested_names = call_openai_suggestion(table_name, column_name, "; ".join(failure_reasons), rules_text, missing_abbr)
+        
+        results.append({
+            "Table Name": table_name,
+            "Column Name": column_name,
+            "Validation Status": validation_status,
+            "Notes": "Valid" if validation_status == "PASS" else "; ".join(failure_reasons),
+            "Suggested Table Name": suggested_names.get("Suggested Table Name", table_name),
+            "Suggested Column Name": suggested_names.get("Suggested Column Name", column_name),
+            "Additional Notes": suggested_names.get("Additional Notes", "N/A"),
+            "Error": suggested_names.get("Error", "None")
         })
     
-    return pd.DataFrame(results_list)
+    return pd.DataFrame(results)
+
+# ==============================
+# 2. STREAMLIT APP UI
+# ==============================
 
 def main():
-    # Load OpenAI API key from environment or fallback
-    openai.api_key = os.getenv("OPENAI_API_KEY", "YOUR_API_KEY")
+    st.set_page_config(page_title="Data Dictionary Validator with AI Suggestions", layout="wide")
+    st.title("📊 Data Dictionary Validator with AI Suggestions")
+    st.write("Upload your Data Dictionary and Validation Rules to validate table and column names. AI will suggest corrections for failed entries.")
+    
+    openai.api_key = st.sidebar.text_input("Enter OpenAI API Key", type="password")
+    
+    st.sidebar.header("Upload Files")
+    uploaded_dict = st.sidebar.file_uploader("Upload Data Dictionary (Excel)", type=["xlsx"])
+    uploaded_rules = st.sidebar.file_uploader("Upload Domain Rules (Text)", type=["txt"])
+    uploaded_abbr = st.sidebar.file_uploader("Upload Abbreviations (CSV)", type=["csv"])
+    uploaded_class_words = st.sidebar.file_uploader("Upload Class Words (CSV)", type=["csv"])
 
-    excel_path = "data/data_dictionary.xlsx"
-    rules_txt_path = "data/domain_rules.txt"
-    abbreviations_csv_path = "data/abbreviations.csv"
+    if uploaded_dict and uploaded_rules and uploaded_abbr and uploaded_class_words and openai.api_key:
+        st.success("✅ All files uploaded successfully!")
+        
+        df_dict = load_data_dictionary(uploaded_dict)
+        rules_text = load_rules_txt(uploaded_rules)
+        abbreviations = load_abbreviations(uploaded_abbr)
+        class_words = load_class_words(uploaded_class_words)
 
-    # Load Data
-    df_dict = load_data_dictionary(excel_path)
-    rules_text = load_rules_txt(rules_txt_path)
-    abbr_dict = load_abbreviations(abbreviations_csv_path)
-
-    # Process validation row by row
-    result_df = process_data_dictionary(df_dict, rules_text, abbr_dict)
-
-    # Export to Excel
-    result_df.to_excel("validation_report.xlsx", index=False)
-    print("Validation complete. Results saved to 'validation_report.xlsx'")
+        if st.button("🔍 Validate & Suggest Corrections"):
+            with st.spinner("Processing validation & AI suggestions..."):
+                results_df = validate_data_dictionary(df_dict, class_words, abbreviations, rules_text)
+                st.subheader("Validation Results with AI Suggestions")
+                st.dataframe(results_df.style.set_sticky())
 
 if __name__ == "__main__":
     main()
