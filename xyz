@@ -115,6 +115,14 @@ def validate_data_dictionary(df: pd.DataFrame, class_words: List[str], abbreviat
 # 2. STREAMLIT APP UI
 # ==============================
 
+import streamlit as st
+import openai
+import pandas as pd
+
+def update_selected_row():
+    """Update session state when dropdown selection changes."""
+    st.session_state.selected_row = st.session_state.selected_row_widget  # Assign dropdown value to session state
+
 def main():
     st.set_page_config(page_title="Data Dictionary Validator with AI Suggestions", layout="wide")
     st.title("📊 Data Dictionary Validator with AI Suggestions")
@@ -138,9 +146,50 @@ def main():
 
         if st.button("🔍 Validate & Suggest Corrections"):
             with st.spinner("Processing validation & AI suggestions..."):
-                results_df = validate_data_dictionary(df_dict, class_words, abbreviations, rules_text)
-                st.subheader("Validation Results with AI Suggestions")
-                st.dataframe(results_df.style.set_sticky())
+                st.session_state["results_df"] = validate_data_dictionary(df_dict, class_words, abbreviations, rules_text)
+
+    # Ensure results persist
+    if "results_df" in st.session_state and not st.session_state["results_df"].empty:
+        results_df = st.session_state["results_df"]
+        st.subheader("Validation Results with AI Suggestions")
+        st.dataframe(results_df)  # Keep DataFrame visible
+
+        failed_rows = results_df[results_df["Validation Status"] == "FAIL"]
+
+        if not failed_rows.empty:
+            # Convert to string for selectbox
+            failed_row_ids = (failed_rows["Table Name"] + " - " + failed_rows["Column Name"]).astype(str).tolist()
+
+            # Initialize session state for dropdown selection if not set
+            if "selected_row" not in st.session_state or st.session_state.selected_row not in failed_row_ids:
+                st.session_state.selected_row = failed_row_ids[0]
+
+            # Set widget key in session state if not already set
+            if "selected_row_widget" not in st.session_state:
+                st.session_state.selected_row_widget = st.session_state.selected_row
+
+            # Persistent dropdown selection using `on_change`
+            st.selectbox(
+                "Select a failed row to view details", 
+                failed_row_ids, 
+                index=failed_row_ids.index(st.session_state.selected_row) if st.session_state.selected_row in failed_row_ids else 0,
+                key="selected_row_widget",
+                on_change=update_selected_row
+            )
+
+            # Fetch details for the selected row safely **immediately after selection**
+            selected_row = st.session_state.selected_row_widget
+            row = failed_rows[(failed_rows["Table Name"] + " - " + failed_rows["Column Name"]) == selected_row]
+            if not row.empty:
+                row = row.iloc[0]
+                st.write(f"**Failure Reasons:** {row['Notes']}")
+                st.write(f"**Suggested Table Name:** {row['Suggested Table Name']}")
+                st.write(f"**Suggested Column Name:** {row['Suggested Column Name']}")
+                st.write(f"**Additional Notes:** {row['Additional Notes']}")
+        else:
+            st.info("✅ No failed validation rows found.")
+    else:
+        st.info("🔍 Run validation to see failed entries.")
 
 if __name__ == "__main__":
     main()
