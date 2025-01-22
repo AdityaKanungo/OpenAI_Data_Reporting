@@ -3,40 +3,54 @@ import pandas as pd
 import json
 import openai
 from typing import Dict, List, Any
+from itertools import combinations
+import io
 
 # ==============================
 # 1. DATA LOADING FUNCTIONS
 # ==============================
 
 def load_data_dictionary(uploaded_file) -> pd.DataFrame:
-    """Loads the data dictionary from an uploaded Excel file."""
     return pd.read_excel(uploaded_file)
 
 def load_rules_txt(uploaded_file) -> str:
-    """Loads the domain rules from an uploaded text file."""
-    return uploaded_file.read().decode("utf-8")
+    return uploaded_file.read().decode("utf-8", errors="ignore")
 
 def load_abbreviations(uploaded_file) -> Dict[str, str]:
-    """Loads abbreviations from an uploaded CSV file and ensures proper formatting."""
-    df_abbr = pd.read_csv(uploaded_file)
-    df_abbr.columns = df_abbr.columns.str.strip()  # Trim spaces from column headers
-    df_abbr = df_abbr.applymap(lambda x: x.strip().upper() if isinstance(x, str) else x)  # Normalize text to uppercase
-    abbr_dict = df_abbr.set_index("ABBR")["NAME"].to_dict()  # Ensure lookup is done on 'ABBR'
-    return abbr_dict
+    df_abbr = pd.read_csv(uploaded_file, encoding="utf-8")
+    df_abbr.columns = df_abbr.columns.str.strip()
+    df_abbr = df_abbr.applymap(lambda x: x.strip().upper() if isinstance(x, str) else x)
+    return df_abbr.set_index("NAME")['ABBR'].to_dict()
 
 def load_class_words(uploaded_file) -> List[str]:
-    """Loads class words from an uploaded CSV file."""
-    df_class = pd.read_csv(uploaded_file)
+    df_class = pd.read_csv(uploaded_file, encoding="utf-8")
     return df_class['CLASS WORDS'].str.strip().str.upper().tolist()
 
-def call_openai_suggestion(table_name: str, column_name: str, failure_reasons: str, rules_text: str, missing_abbr: List[str]) -> Dict[str, str]:
-    """Calls OpenAI API to suggest a corrected table and column name, ensuring non-abbreviations and valid abbreviations are retained."""
+def check_column_parts(column_name: str, abbreviations: Dict[str, str], english_name: str, class_words: List[str]) -> List[str]:
+    column_parts = column_name.split('_')
+    english_words = english_name.split()
+    possible_combinations = set()
+    missing_words = []
+    
+    for length in range(1, len(english_words) + 1):
+        for subset in combinations(english_words, length):
+            phrase = " ".join(subset)
+            if phrase in abbreviations:
+                possible_combinations.add(abbreviations[phrase])
+    
+    possible_combinations.update([abbreviations.get(word, word) for word in english_words])
+    possible_combinations.update(class_words)
+    
+    for part in column_parts:
+        if part not in possible_combinations:
+            missing_words.append(part)
+    
+    return missing_words
+
+def call_openai_suggestion(table_name: str, column_name: str, failure_reasons: str, rules_text: str) -> Dict[str, str]:
     prompt = f"""
     You are an expert in database table and column naming conventions.
     Based on the following validation failure reasons and naming rules, suggest a corrected table and column name.
-    Ensure that non-abbreviation words remain unchanged in the column name.
-    If a word appears to be a complete word rather than an abbreviation, do not remove it.
-    If a word is already in the approved abbreviation list, do not remove or modify it.
     
     Table Name: {table_name}
     Column Name: {column_name}
@@ -47,16 +61,11 @@ def call_openai_suggestion(table_name: str, column_name: str, failure_reasons: s
     Naming Rules:
     {rules_text}
     
-    Words that should remain unchanged in the column name:
-    {', '.join(missing_abbr)}
-    
-    If the word HEADER (or similar full words) is flagged but does not appear to be an abbreviation, retain it in the column name and add a note stating: 'Although HEADER is not in the abbreviation list, it seems like a full word and has been kept.'
-    
     Format the response as JSON:
     {{
       "Suggested Table Name": "{table_name}",
       "Suggested Column Name": "{column_name}",
-      "Additional Notes": "If applicable, note why HEADER or similar words have been retained."
+      "Additional Notes": "Provide any relevant notes."
     }}
     """
     try:
@@ -68,128 +77,105 @@ def call_openai_suggestion(table_name: str, column_name: str, failure_reasons: s
         return json.loads(response["choices"][0]["message"]["content"])
     except Exception as e:
         return {"Suggested Table Name": table_name, "Suggested Column Name": column_name, "Additional Notes": "N/A", "Error": str(e)}
-
 def validate_data_dictionary(df: pd.DataFrame, class_words: List[str], abbreviations: Dict[str, str], rules_text: str) -> pd.DataFrame:
-    """Validates the data dictionary based on the provided rules, class words, and abbreviations."""
     results = []
     for _, row in df.iterrows():
         table_name = str(row.get('Table Name', '')).strip().upper()
         column_name = str(row.get('Column Name', '')).strip().upper()
+        english_name = str(row.get('English Name', '')).strip()
         
+        # Ensure English Name is formatted properly (Title Case)
+        formatted_english_name = " ".join(word.capitalize() for word in english_name.split())
+
         table_valid = table_name.startswith('T') and (table_name.endswith('FACT') or table_name.endswith('DIM'))
-        column_prefix = column_name[:3]
-        column_remaining_parts = column_name[4:].split('_') if len(column_name) > 3 else []
-        
-        column_valid = column_prefix in class_words
+        missing_parts = check_column_parts(column_name, abbreviations, english_name.upper(), class_words)
         
         failure_reasons = []
         if not table_valid:
             failure_reasons.append("Table name must start with 'T' and end with 'FACT' or 'DIM'.")
-        if not column_valid:
-            failure_reasons.append(f"Column name must start with a valid class word. Found '{column_prefix}', which is not in the list.")
-        
-        missing_abbr = [part for part in column_remaining_parts if part not in abbreviations and part.isalpha()]
-        if missing_abbr:
-            failure_reasons.append(f"Unrecognized abbreviation(s): {', '.join(missing_abbr)} are not in the approved list.")
+        if missing_parts:
+            failure_reasons.append(f"Column name is missing or incorrect for: {', '.join(missing_parts)}")
         
         validation_status = "PASS" if not failure_reasons else "FAIL"
         
-        suggested_names = {"Suggested Table Name": table_name, "Suggested Column Name": column_name, "Additional Notes": "N/A"}
+        suggested_names = {"Suggested Table Name": "", "Suggested Column Name": "", "Additional Notes": "N/A"}
         if validation_status == "FAIL":
-            suggested_names = call_openai_suggestion(table_name, column_name, "; ".join(failure_reasons), rules_text, missing_abbr)
+            suggested_names = call_openai_suggestion(table_name, column_name, "; ".join(failure_reasons), rules_text)
         
         results.append({
             "Table Name": table_name,
             "Column Name": column_name,
+            "English Name": formatted_english_name,  # Apply the title case transformation here
             "Validation Status": validation_status,
             "Notes": "Valid" if validation_status == "PASS" else "; ".join(failure_reasons),
-            "Suggested Table Name": suggested_names.get("Suggested Table Name", table_name),
-            "Suggested Column Name": suggested_names.get("Suggested Column Name", column_name),
+            "Suggested Table Name": suggested_names.get("Suggested Table Name", ""),
+            "Suggested Column Name": suggested_names.get("Suggested Column Name", ""),
             "Additional Notes": suggested_names.get("Additional Notes", "N/A"),
             "Error": suggested_names.get("Error", "None")
         })
     
     return pd.DataFrame(results)
 
-# ==============================
-# 2. STREAMLIT APP UI
-# ==============================
-
-import streamlit as st
-import openai
-import pandas as pd
-
-def update_selected_row():
-    """Update session state when dropdown selection changes."""
-    st.session_state.selected_row = st.session_state.selected_row_widget  # Assign dropdown value to session state
 
 def main():
-    st.set_page_config(page_title="Data Dictionary Validator with AI Suggestions", layout="wide")
-    st.title("📊 Data Dictionary Validator with AI Suggestions")
-    st.write("Upload your Data Dictionary and Validation Rules to validate table and column names. AI will suggest corrections for failed entries.")
+    st.set_page_config(page_title="Data Dictionary Validator", layout="wide")
+    st.title("📊 Data Dictionary Validator")
     
     openai.api_key = st.sidebar.text_input("Enter OpenAI API Key", type="password")
     
-    st.sidebar.header("Upload Files")
     uploaded_dict = st.sidebar.file_uploader("Upload Data Dictionary (Excel)", type=["xlsx"])
     uploaded_rules = st.sidebar.file_uploader("Upload Domain Rules (Text)", type=["txt"])
     uploaded_abbr = st.sidebar.file_uploader("Upload Abbreviations (CSV)", type=["csv"])
     uploaded_class_words = st.sidebar.file_uploader("Upload Class Words (CSV)", type=["csv"])
-
+    
     if uploaded_dict and uploaded_rules and uploaded_abbr and uploaded_class_words and openai.api_key:
-        st.success("✅ All files uploaded successfully!")
-        
         df_dict = load_data_dictionary(uploaded_dict)
         rules_text = load_rules_txt(uploaded_rules)
         abbreviations = load_abbreviations(uploaded_abbr)
         class_words = load_class_words(uploaded_class_words)
 
         if st.button("🔍 Validate & Suggest Corrections"):
-            with st.spinner("Processing validation & AI suggestions..."):
+            with st.spinner("Processing validation..."):
                 st.session_state["results_df"] = validate_data_dictionary(df_dict, class_words, abbreviations, rules_text)
+        
+    if "results_df" in st.session_state:
+        df_results = st.session_state["results_df"]
+        
+        if not df_results.empty:
+            st.subheader("Validation Results")
+            st.dataframe(df_results)
 
-    # Ensure results persist
-    if "results_df" in st.session_state and not st.session_state["results_df"].empty:
-        results_df = st.session_state["results_df"]
-        st.subheader("Validation Results with AI Suggestions")
-        st.dataframe(results_df)  # Keep DataFrame visible
+            # Extract only failed rows
+            failed_rows_df = df_results[df_results['Validation Status'] == "FAIL"]
+            
+            if not failed_rows_df.empty:
+                st.subheader("🚨 Failed Rows")
+                
+                # Create a dropdown to select a specific failed row based on Column Name
+                selected_failed_row = st.selectbox(
+                    "Select a Failed Column to View Details",
+                    failed_rows_df["Column Name"].tolist(),
+                    index=0
+                )
 
-        failed_rows = results_df[results_df["Validation Status"] == "FAIL"]
+                # Display the selected failed row details
+                selected_row_data = failed_rows_df[failed_rows_df["Column Name"] == selected_failed_row].to_dict(orient='records')[0]
+                st.json(selected_row_data)  # Display details in JSON format for better readability
 
-        if not failed_rows.empty:
-            # Convert to string for selectbox
-            failed_row_ids = (failed_rows["Table Name"] + " - " + failed_rows["Column Name"]).astype(str).tolist()
-
-            # Initialize session state for dropdown selection if not set
-            if "selected_row" not in st.session_state or st.session_state.selected_row not in failed_row_ids:
-                st.session_state.selected_row = failed_row_ids[0]
-
-            # Set widget key in session state if not already set
-            if "selected_row_widget" not in st.session_state:
-                st.session_state.selected_row_widget = st.session_state.selected_row
-
-            # Persistent dropdown selection using `on_change`
-            st.selectbox(
-                "Select a failed row to view details", 
-                failed_row_ids, 
-                index=failed_row_ids.index(st.session_state.selected_row) if st.session_state.selected_row in failed_row_ids else 0,
-                key="selected_row_widget",
-                on_change=update_selected_row
+            # Convert DataFrame to Excel
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+                df_results.to_excel(writer, sheet_name="Validation Report", index=False)
+            
+            excel_data = output.getvalue()
+            
+            st.download_button(
+                label="📥 Download Validation Report (Excel)",
+                data=excel_data,
+                file_name="Validation_Report.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
-            # Fetch details for the selected row safely **immediately after selection**
-            selected_row = st.session_state.selected_row_widget
-            row = failed_rows[(failed_rows["Table Name"] + " - " + failed_rows["Column Name"]) == selected_row]
-            if not row.empty:
-                row = row.iloc[0]
-                st.write(f"**Failure Reasons:** {row['Notes']}")
-                st.write(f"**Suggested Table Name:** {row['Suggested Table Name']}")
-                st.write(f"**Suggested Column Name:** {row['Suggested Column Name']}")
-                st.write(f"**Additional Notes:** {row['Additional Notes']}")
-        else:
-            st.info("✅ No failed validation rows found.")
-    else:
-        st.info("🔍 Run validation to see failed entries.")
 
 if __name__ == "__main__":
     main()
