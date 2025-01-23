@@ -70,13 +70,6 @@ def highlight_validation_status(val):
         return 'background-color: orange; color: black; font-weight: bold;'
     return ''
 
-def highlight_failure_reason(val):
-    """Applies color coding based on failure reason."""
-    if "Table name" in str(val):
-        return 'background-color: lightcoral; color: white; font-weight: bold;'  # Red for table name issues
-    elif "Column name" in str(val):
-        return 'background-color: lightblue; color: black; font-weight: bold;'  # Blue for column name issues
-    return ''
 
 def spell_check_description(description: str) -> dict:
     """
@@ -128,21 +121,6 @@ def capitalize_english_name(english_name) -> str:
     capitalized_name = " ".join(word.capitalize() for word in english_name.split())
 
     return capitalized_name
-
-
-def highlight_validation_status(val):
-    """Applies orange background if validation status is FAIL."""
-    if val == "FAIL":
-        return 'background-color: orange; color: black; font-weight: bold;'
-    return ''
-
-def highlight_failure_reason(val):
-    """Applies color coding based on failure reason."""
-    if "Table name" in str(val):
-        return 'background-color: lightcoral; color: white; font-weight: bold;'  # Red for table name issues
-    elif "Column name" in str(val):
-        return 'background-color: lightblue; color: black; font-weight: bold;'  # Blue for column name issues
-    return ''
 
 
 def call_openai_suggestion(
@@ -219,57 +197,23 @@ def call_openai_suggestion(
         }
 
 
-
-def get_missing_terms(column_name: str, english_name: str, abbreviations: Dict[str, str], class_words: List[str]) -> Dict[str, str]:
+def call_openai_for_sample_data(column_name: str, description: str, precision: int, scale: int, openai_api_key: str) -> List[str]:
     """
-    Identifies missing or incorrect abbreviations in the column name by comparing it with the English name.
-    Suggests replacements if necessary.
+    Calls OpenAI API to generate sample data based on column name, description, precision, and scale.
     """
-    column_parts = column_name.split('_')
-    english_terms = set(english_name.split())
+    openai.api_key = openai_api_key
 
-    # Identify known parts
-    recognized_parts = set()
-    unrecognized_parts = set()
-    
-    for part in column_parts:
-        if part in abbreviations or part in class_words or part in english_terms:
-            recognized_parts.add(part)
-        else:
-            unrecognized_parts.add(part)
-
-    # Determine missing terms
-    covered_terms = {abbreviations.get(part, part) for part in recognized_parts}  # Convert abbreviations to full words
-    missing_terms = english_terms - covered_terms  # Identify missing words from English name
-
-    # Find appropriate abbreviations for missing terms
-    suggested_replacements = {}
-    for term in missing_terms:
-        best_match, score = process.extractOne(term, abbreviations.keys())
-        if score > 85:  # Confidence threshold
-            suggested_replacements[best_match] = abbreviations[best_match]
-
-    return {
-        "unrecognized_parts": list(unrecognized_parts),
-        "missing_terms": list(missing_terms),
-        "suggested_replacements": suggested_replacements
-    }
-
-def call_openai_for_correction(column_name: str, missing_terms: List[str], incorrect_parts: List[str], abbreviations: Dict[str, str]) -> Dict[str, str]:
-    """
-    Calls OpenAI API to refine and suggest the correct column name.
-    """
     prompt = f"""
-    The given column name '{column_name}' contains unrecognized abbreviations {incorrect_parts}.
-    Based on the English meaning of the column and the approved abbreviations, suggest the correct abbreviation replacements.
-    
-    Missing terms: {', '.join(missing_terms)}
-    Approved Abbreviations: {json.dumps(abbreviations)}
+    Generate 3 realistic example values for a database column based on its name, description, precision, and scale.
 
-    Please format the response as:
+    **Column Name**: {column_name}  
+    **Description**: {description}  
+    **Precision**: {precision}  
+    **Scale**: {scale}  
+
+    The sample data must align with the given precision and scale. Provide a JSON response in this format:
     {{
-      "corrected_column_name": "NEW_NAME",
-      "notes": "Explanation of corrections"
+        "samples": ["example1", "example2", "example3"]
     }}
     """
 
@@ -279,24 +223,10 @@ def call_openai_for_correction(column_name: str, missing_terms: List[str], incor
             messages=[{"role": "user", "content": prompt}],
             temperature=0
         )
-        return json.loads(response["choices"][0]["message"]["content"])
+        return json.loads(response["choices"][0]["message"]["content"])["samples"]
+    
     except Exception as e:
-        return {"corrected_column_name": column_name, "notes": f"Error: {str(e)}"}
-
-def find_missing_english_terms(column_name: str, english_name: str, abbreviations: Dict[str, str]) -> str:
-    """
-    Identifies missing terms from the English Name that are not covered in the column name or abbreviations.
-    """
-    column_parts = set(column_name.split('_'))
-    english_terms = set(english_name.split())
-
-    # Convert abbreviations to full words where applicable
-    covered_terms = {abbreviations.get(part, part) for part in column_parts}
-
-    # Identify missing words from English name that are not in the column name or abbreviations
-    missing_english_terms = english_terms - covered_terms
-
-    return " ".join(missing_english_terms)
+        return [f"Error: {str(e)}", "N/A", "N/A"]
 
 
 
@@ -311,7 +241,12 @@ def validate_abbreviation_usage(column_name: str, abbreviations: Dict[str, str],
     # Approved terms = abbreviations (keys & values) + class words + English name terms
     approved_terms = set(abbreviations.keys()).union(set(abbreviations.values())).union(set(class_words)).union(english_terms)
 
-    unrecognized_parts = [part for part in column_parts if part not in approved_terms]
+        # ✅ Keep all numeric values as valid
+    def is_number(value):
+        return bool(re.match(r"^\d+$", value))  # Check if value is purely numeric
+
+    # Find missing parts
+    unrecognized_parts = [part for part in column_parts if part not in approved_terms and not is_number(part)]
 
     # **Fix: If all words are valid, return a PASS state**
     if not unrecognized_parts:
@@ -383,53 +318,49 @@ def call_openai_suggestion(
 import random
 import datetime
 
-def generate_sample_data(data_type: str, precision: int, scale: int, column_name: str, description: str) -> List[str]:
+def generate_sample_data(data_type: str, precision: int, scale: int, column_name: str, description: str, openai_api_key: str) -> List[str]:
     """
-    Generates three sample values based on the column's data type, precision, scale, and name.
+    Generates three meaningful sample values based on column name, description, precision, and scale.
+    Uses OpenAI API for ambiguous cases.
     """
     column_name_lower = column_name.lower()
+    description_lower = description.lower() if description else ""
     samples = []
 
-    if "date" in column_name_lower or "time" in column_name_lower:
-        # Generate three random dates
+    if "date" in column_name_lower or "dob" in column_name_lower or "birth" in column_name_lower:
+        # Generate realistic past dates
         for _ in range(3):
-            samples.append((datetime.date.today() - datetime.timedelta(days=random.randint(1, 1000))).strftime("%Y-%m-%d"))
+            samples.append((datetime.date.today() - datetime.timedelta(days=random.randint(5000, 30000))).strftime("%Y-%m-%d"))
 
-    elif "id" in column_name_lower or "code" in column_name_lower:
-        # Generate three integer IDs or alphanumeric codes
+    elif "id" in column_name_lower or "code" in column_name_lower or "ref" in column_name_lower:
+        # Generate formatted IDs
         for _ in range(3):
-            samples.append(str(random.randint(1000, 9999)))
+            samples.append(f"ID{random.randint(1000, 9999)}")
 
     elif "price" in column_name_lower or "amount" in column_name_lower or "cost" in column_name_lower:
-        # Generate three decimal values
+        # Generate realistic monetary values
         for _ in range(3):
-            samples.append(f"{random.uniform(10, 1000):.{scale}f}")
-
-    elif "name" in column_name_lower or "desc" in column_name_lower:
-        # Generate three text values
-        choices = ["John Doe", "Sample Product", "Test Data", "Alice Brown", "Item X"]
-        samples = random.sample(choices, 3)
-
-    elif data_type.startswith("VARCHAR") or data_type.startswith("TEXT"):
-        # Generate three generic text values based on column type
-        max_length = min(precision, 50) if precision else 20
-        for _ in range(3):
-            samples.append(''.join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", k=max_length)))
+            samples.append(f"${random.uniform(10, 10000):.{scale}f}")
 
     elif data_type.startswith("DECIMAL") or data_type.startswith("FLOAT"):
-        # Generate three decimal values with specified precision & scale
+        # Generate realistic decimal values
         for _ in range(3):
             samples.append(f"{random.uniform(10**(precision-scale-1), 10**(precision-scale)):.{scale}f}")
 
     elif data_type.startswith("INT") or data_type.startswith("BIGINT"):
-        # Generate three numeric integers
+        # Generate realistic integer values
         for _ in range(3):
             samples.append(str(random.randint(10**(precision-1) if precision else 1, 10**precision-1 if precision else 9999)))
 
-    return samples if samples else ["N/A", "N/A", "N/A"]  # Default case if no rule applies
+    else:
+        # ✅ Pass precision & scale to OpenAI API for more accurate sample data
+        samples = call_openai_for_sample_data(column_name, description, precision, scale, openai_api_key)
+
+    return samples if samples else ["N/A", "N/A", "N/A"]  # Default case
 
 
-def validate_data_dictionary(df: pd.DataFrame, class_words: List[str], abbreviations: Dict[str, str]) -> pd.DataFrame:
+
+def validate_data_dictionary(df: pd.DataFrame, class_words: List[str], abbreviations: Dict[str, str], openai_api_key: str) -> pd.DataFrame:
     """
     Validates the data dictionary and generates three sample data records for each column.
     """
@@ -481,7 +412,7 @@ def validate_data_dictionary(df: pd.DataFrame, class_words: List[str], abbreviat
         validation_status = "PASS" if not failure_reasons and not table_failure_reason else "FAIL"
 
         # ✅ Generate Three Sample Data Records
-        sample_data_records = generate_sample_data(data_type, precision, scale, column_name, description)
+        sample_data_records = generate_sample_data(data_type, precision, scale, column_name, description, openai_api_key)
 
         # ✅ If FAIL, Call OpenAI for Suggested Fixes
         if validation_status == "FAIL":
@@ -527,8 +458,8 @@ def validate_data_dictionary(df: pd.DataFrame, class_words: List[str], abbreviat
 def main():
     st.set_page_config(page_title="Data Dictionary Validator", layout="wide")
     st.title("📊 Data Dictionary Validator")
-    openai.api_key = st.sidebar.text_input("Enter OpenAI API Key", type="password")
-    uploaded_dict = st.sidebar.file_uploader("Upload Data Dictionary (Excel)", type=["xlsx"])
+    openai_api_key = st.sidebar.text_input("🔑 Enter OpenAI API Key", type="password")
+    uploaded_dict = st.sidebar.file_uploader("📂 Upload Data Dictionary (Excel)", type=["xlsx"])
     
     tab1, tab2, tab3, tab4 = st.tabs(["🔍 Validation", "📖 Domain Rules", "🔍 Abbreviations", "🔍 Class Words"])
     
@@ -546,7 +477,7 @@ def main():
                     domain_rules = load_domain_rules()
                     abbreviations_dict = abbreviations.set_index("NAME")["ABBR"].to_dict()
                     class_words_list = class_words["CLASS WORDS"].tolist()
-                    results_df = validate_data_dictionary(df_dict, class_words_list, abbreviations_dict)
+                    results_df = validate_data_dictionary(df_dict, class_words_list, abbreviations_dict, openai_api_key)
                     st.session_state["results_df"] = results_df
         
         if "results_df" in st.session_state:
