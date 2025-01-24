@@ -89,6 +89,12 @@ def highlight_validation_status(val):
         return 'background-color: orange; color: black; font-weight: bold;'
     return ''
 
+def highlight_incorrect_capitalization(val):
+    """Applies red background if English name is not properly capitalized."""
+    if isinstance(val, str) and val != capitalize_english_name(val):
+        return 'background-color: yellow; color: black; font-weight: bold;'
+    return ''
+
 
 def spell_check_description(description: str) -> dict:
     """
@@ -334,9 +340,6 @@ def call_openai_suggestion(
         }
 
 
-import random
-import datetime
-
 def generate_sample_data(data_type: str, precision: int, scale: int, column_name: str, description: str, openai_api_key: str) -> List[str]:
     """
     Generates three meaningful sample values based on column name, description, precision, and scale.
@@ -402,12 +405,13 @@ def validate_data_dictionary(df: pd.DataFrame, class_words: List[str], abbreviat
         table_name = str(row.get('Table Name', '')).strip().upper()
         column_name = str(row.get('Column Name', '')).strip().upper()
         english_name = str(row.get('English Name', '')).strip().upper()
+        english_name1 = str(row.get('English Name', '')).strip()
         data_type = str(row.get('Data Type', '')).strip().upper()
         precision = int(row.get('Precision', 0)) if pd.notna(row.get('Precision')) else 0
         scale = int(row.get('Scale', 0)) if pd.notna(row.get('Scale')) else 0
         description = str(row.get('Description/Business Rules', '')).strip()
 
-        spell_check_result = spell_check_description(description)
+        #spell_check_result = spell_check_description(description)
 
         failure_reasons = []
         table_failure_reason = ""
@@ -461,13 +465,13 @@ def validate_data_dictionary(df: pd.DataFrame, class_words: List[str], abbreviat
             suggested_column_name = ""
             additional_notes = "No corrections needed."
 
-        english_name = spell_check_description(english_name)
-        english_name = capitalize_english_name(english_name)
+        #english_name = spell_check_description(english_name)
+        #english_name = capitalize_english_name(english_name)
 
         results.append({
             "Table Name": table_name,
             "Column Name": column_name,
-            "English Name": english_name,
+            "English Name": english_name1,
             "Data Type": data_type,
             "Precision": precision,
             "Scale": scale,
@@ -477,7 +481,7 @@ def validate_data_dictionary(df: pd.DataFrame, class_words: List[str], abbreviat
             "Suggested Column Name": suggested_column_name,
             "Suggested Class Word": class_word_validation["Suggested Class Word"],
             "Additional Notes": additional_notes,
-            "Corrected Description": spell_check_result["Corrected Description"],
+            "Corrected Description": description,
             "Sample Data 1": sample_data_records[0],
             "Sample Data 2": sample_data_records[1],
             "Sample Data 3": sample_data_records[2]
@@ -521,7 +525,12 @@ def main():
                 st.subheader("Validation Results")
                 
                 # Style dataframe
-                styled_df = df_results.style.applymap(highlight_validation_status, subset=["Validation Status"])
+                styled_df = (
+                    df_results.style
+                    .applymap(highlight_validation_status, subset=["Validation Status"])
+                    .applymap(highlight_incorrect_capitalization, subset=["English Name"])
+                )
+
 
                 # Display DataFrame
                 st.dataframe(styled_df)
