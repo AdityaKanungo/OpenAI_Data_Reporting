@@ -62,6 +62,25 @@ def check_column_parts(column_name: str, abbreviations: Dict[str, str], english_
 
     return missing_words
 
+def validate_class_word(column_name: str, data_type: str, english_name: str, class_word_type_map: Dict[str, List[str]]) -> Dict[str, str]:
+    """
+    Validates if the class word (first three letters of the column name) matches the expected data type.
+    If not, suggests a correction based on the provided English name.
+    """
+    class_word = column_name[:3]  # Extract first three letters
+    expected_types = class_word_type_map.get(class_word, [])
+    
+    if data_type not in expected_types:
+        # Determine replacement class word based on English name
+        suggested_class_word = "TXT" if "text" in english_name.lower() else "IND"  # Default fallback
+        
+        return {
+            "Validation Status": "FAIL",
+            "Class Word Issue": f"Class word '{class_word}' does not match expected data type '{data_type}'.",
+            "Suggested Class Word": suggested_class_word
+        }
+    
+    return {"Validation Status": "PASS", "Class Word Issue": "Valid", "Suggested Class Word": ""}
 
 
 def highlight_validation_status(val):
@@ -288,7 +307,7 @@ def call_openai_suggestion(
 
     Ensure that:
     - Non-abbreviation words remain unchanged.
-    - If the table name does not follow the format `T_*_*_*_FACT/DIM/STG/RPTNG`, suggest a reasonable correction.
+    - If the table name does not follow the format T_*_*_*_FACT/DIM/STG/RPTNG, suggest a reasonable correction.
     - If the column name has abbreviations not in the approved list, correct them while preserving meaning.
 
     Format your response as JSON:
@@ -362,9 +381,22 @@ def generate_sample_data(data_type: str, precision: int, scale: int, column_name
 
 def validate_data_dictionary(df: pd.DataFrame, class_words: List[str], abbreviations: Dict[str, str], openai_api_key: str) -> pd.DataFrame:
     """
-    Validates the data dictionary and generates three sample data records for each column.
+    Validates the data dictionary, checks for class word mismatches, and generates sample data.
     """
     results = []
+    
+    class_word_type_map = {
+        "TXT": ["VARCHAR", "TEXT"],
+        "NAM": ["VARCHAR", "TEXT"],
+        "CDE": ["INT", "BIGINT", "VARCHAR"],
+        "DTE": ["DATE", "DATETIME", "TIMESTAMP"],
+        "TME": ["TIME", "DATETIME", "TIMESTAMP"],
+        "IDN": ["INT", "BIGINT", "NUMBER"],
+        "NBR": ["INT", "BIGINT"],
+        "AMT": ["DECIMAL", "FLOAT", "NUMERIC"],
+        "CNT": ["INT", "BIGINT"],
+        "IND": ["BOOLEAN", "CHAR", "VARCHAR"]
+    }
     
     for _, row in df.iterrows():
         table_name = str(row.get('Table Name', '')).strip().upper()
@@ -380,7 +412,7 @@ def validate_data_dictionary(df: pd.DataFrame, class_words: List[str], abbreviat
         failure_reasons = []
         table_failure_reason = ""
 
-        # ✅ Validate Table Name
+        # Validate Table Name
         table_valid = table_name.startswith('T') and (
             table_name.endswith('FACT') or 
             table_name.endswith('DIM') or 
@@ -390,13 +422,19 @@ def validate_data_dictionary(df: pd.DataFrame, class_words: List[str], abbreviat
         if not table_valid:
             table_failure_reason = "Table name must start with 'T' and end with {'FACT','DIM','STG','RPTNG'}."
 
-        # ✅ Validate Column Name Parts
+        # Validate Column Name Parts
         missing_parts = check_column_parts(column_name, abbreviations, english_name, class_words)
 
-        # ✅ Validate Abbreviation Usage
+        # Validate Abbreviation Usage
         issues = validate_abbreviation_usage(column_name, abbreviations, class_words, english_name)
 
-        # ✅ Remove "missing term" if already flagged as an "unrecognized abbreviation"
+        # Validate Class Word Usage
+        class_word_validation = validate_class_word(column_name, data_type, english_name, class_word_type_map)
+
+        if class_word_validation["Validation Status"] == "FAIL":
+            failure_reasons.append(class_word_validation["Class Word Issue"])
+
+        # Remove "missing term" if already flagged as an "unrecognized abbreviation"
         filtered_missing_parts = [part for part in missing_parts if part not in issues["unrecognized_parts"]]
 
         if filtered_missing_parts:
@@ -405,16 +443,11 @@ def validate_data_dictionary(df: pd.DataFrame, class_words: List[str], abbreviat
         if issues["unrecognized_parts"]:
             failure_reasons.append(f"Unrecognized abbreviation(s): {', '.join(issues['unrecognized_parts'])} are not in the approved list.")
 
-        # ✅ Collect Validation Notes
         column_failure_reason = "; ".join(failure_reasons)
-
-        # ✅ Determine PASS/FAIL Status
         validation_status = "PASS" if not failure_reasons and not table_failure_reason else "FAIL"
 
-        # ✅ Generate Three Sample Data Records
         sample_data_records = generate_sample_data(data_type, precision, scale, column_name, description, openai_api_key)
 
-        # ✅ If FAIL, Call OpenAI for Suggested Fixes
         if validation_status == "FAIL":
             openai_suggestion = call_openai_suggestion(
                 table_name, column_name, english_name, table_failure_reason, 
@@ -426,16 +459,15 @@ def validate_data_dictionary(df: pd.DataFrame, class_words: List[str], abbreviat
         else:
             suggested_table_name = ""
             suggested_column_name = ""
-            additional_notes = "No corrections needed as all abbreviations are recognized and correctly used."
+            additional_notes = "No corrections needed."
 
         english_name = spell_check_description(english_name)
         english_name = capitalize_english_name(english_name)
 
-        # ✅ Append Validation Results
         results.append({
             "Table Name": table_name,
             "Column Name": column_name,
-            "English name": english_name,
+            "English Name": english_name,
             "Data Type": data_type,
             "Precision": precision,
             "Scale": scale,
@@ -443,14 +475,16 @@ def validate_data_dictionary(df: pd.DataFrame, class_words: List[str], abbreviat
             "Notes": "Valid" if validation_status == "PASS" else column_failure_reason or table_failure_reason,
             "Suggested Table Name": suggested_table_name,
             "Suggested Column Name": suggested_column_name,
+            "Suggested Class Word": class_word_validation["Suggested Class Word"],
             "Additional Notes": additional_notes,
             "Corrected Description": spell_check_result["Corrected Description"],
             "Sample Data 1": sample_data_records[0],
             "Sample Data 2": sample_data_records[1],
             "Sample Data 3": sample_data_records[2]
         })
-
+    
     return pd.DataFrame(results)
+
 
 
 
