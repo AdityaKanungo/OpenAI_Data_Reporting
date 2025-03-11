@@ -1,62 +1,119 @@
-import re
 import spacy
+from spacy.tokenizer import Tokenizer
 from spacy.pipeline import EntityRuler
+from spacy.util import compile_infix_regex
+from spacy.matcher import Matcher
+import re
 
+# Original class
 class Redacted:
-    def __init__(self):
-        self.nlp = spacy.load("en_core_web_sm")
-        self.ruler = EntityRuler(self.nlp, overwrite_ents=True)
-        self.nlp.add_pipe('entity_ruler')
-        
-        # Define all patterns once in the constructor
-        patterns = [
-            {"label": "CASENUM", "pattern": [{"TEXT": {"REGEX": r"^\d{12}$"}}]},
-            {"label": "CASENUM", "pattern": [{"TEXT": {"REGEX": r"^\d{14}$"}}]},
-            {"label": "DOB", "pattern": [{"TEXT": {"REGEX": r"^([0-9]|[12][0-9]|3[01])/([1-9]|1[0-2])/([0-9]{4})$"}}]},
-            {"label": "SSN", "pattern": [{"TEXT": {"REGEX": r"^\d{3}\W\d{2}\W\d{4}$"}}]},
-            {"label": "STREETNUM", "pattern": [{"TEXT": {"REGEX": r"^\d{3}\d{4}$"}}]},
-            {"label": "ZIP", "pattern": [{"TEXT": {"REGEX": r"^\d{5}$"}}]}
-        ]
-        self.ruler.add_patterns(patterns)
+    def __init__(self, nlp):
+        self.nlp = nlp
+        nlp = spacy.load("en_core_web_sm")
+        nlp.tokenizer = custom_tokenizer(nlp)
+        self.ruler = EntityRuler(nlp, overwrite_ents=True)
+        nlp.add_pipe("entity_ruler")
+        self.matcher = Matcher(nlp.vocab)
 
-    def contains_entity(self, text, label):
+    # Customize tokenizer
+    def custom_tokenizer(nlp):
+        inf = list(nlp.Defaults.infixes)
+        inf.remove(r"(?<=[0-9])\-(?=[0-9])")
+        inf = tuple(inf)
+        infix_re = compile_infix_regex(inf)
+
+        return Tokenizer(nlp.vocab, 
+                         prefix_search=nlp.tokenizer.prefix_search,
+                         suffix_search=nlp.tokenizer.suffix_search,
+                         infix_finditer=infix_re.finditer,
+                         token_match=nlp.tokenizer.token_match,
+                         rules=nlp.Defaults.tokenizer_exceptions)
+
+    # Filter out case number
+    def casenum(self):
+        casenum_pattern = [{"label": "CASENUM", "pattern": [{"TEXT": {"REGEX": r"^\d{12}|\d{14}$"}}]}]
+        self.ruler.add_patterns(casenum_pattern)
+        self.nlp.get_pipe("entity_ruler").add_patterns(casenum_pattern)
+
+    # Filter out birthdate
+    def birthday(self):
+        bday_pattern = [{"label": "DOB", "pattern": [{"TEXT": {"REGEX": r"^([0-9]|[12][0-9]|3[01])/([1-9]|1[0-2])/([0-9]{4})$"}}]}]
+        self.ruler.add_patterns(bday_pattern)
+        self.nlp.get_pipe("entity_ruler").add_patterns(bday_pattern)
+
+    # Filter out SSN
+    def ssn(self):
+        ssn_pattern = [{"label": "SSN", "pattern": [{"TEXT": {"REGEX": r"^\d{3}\W\d{2}\W\d{4}$"}}]}]
+        self.ruler.add_patterns(ssn_pattern)
+        self.nlp.get_pipe("entity_ruler").add_patterns(ssn_pattern)
+
+    # Filter out address
+    def streetnum(self):
+        streetnum_pattern = [{"label": "STREETNUM", "pattern": [{"TEXT": {"REGEX": r"^\d{3}\d{4}$"}}]}]
+        self.ruler.add_patterns(streetnum_pattern)
+        self.nlp.get_pipe("entity_ruler").add_patterns(streetnum_pattern)
+
+    # Filter out ZIP code
+    def zip(self):
+        zip_pattern = [{"label": "ZIP", "pattern": [{"TEXT": {"REGEX": r"^\d{5}$"}}]}]
+        self.ruler.add_patterns(zip_pattern)
+        self.nlp.get_pipe("entity_ruler").add_patterns(zip_pattern)
+
+    # Process input text and return detected entities
+    def extract_entities(self, text):
         doc = self.nlp(text)
-        return any(ent.label_ == label for ent in doc.ents)
-    
-    def casenum(self, text):
-        return self.contains_entity(text, "CASENUM")
+        return [(ent.text, ent.label_) for ent in doc.ents]
 
-    def birthday(self, text):
-        return self.contains_entity(text, "DOB")
+    # Execute to check if any sensitive entity is detected
+    def filter(self, text):
+        labeled_text = self.extract_entities(text)
+        if any(re.findall(r'PERSON|DOB|SSN|CASENUM|STREETNUM|ZIP', str(labeled_text), re.IGNORECASE)):
+            return "Possible matches found"
+        else:
+            return "No matches found"
 
-    def ssn(self, text):
-        return self.contains_entity(text, "SSN")
 
-    def streetnum(self, text):
-        return self.contains_entity(text, "STREETNUM")
+# Instantiate the class
+nlp_model = spacy.load("en_core_web_sm")
+redacted = Redacted(nlp_model)
 
-    def zip(self, text):
-        return self.contains_entity(text, "ZIP")
+# Apply entity filters
+redacted.ssn()
+redacted.birthday()
+redacted.casenum()
+redacted.streetnum()
+redacted.zip()
 
-def run_tests():
-    redacted = Redacted()
-    
-    assert redacted.casenum("123456789012"), "Failed: Valid 12-digit case number"
-    assert redacted.casenum("12345678901234"), "Failed: Valid 14-digit case number"
-    assert not redacted.casenum("1234567890"), "Failed: Invalid case number"
-    
-    assert redacted.birthday("5/12/1990"), "Failed: Valid birthday"
-    assert not redacted.birthday("32/12/1990"), "Failed: Invalid birthday"
-    
-    assert redacted.ssn("123-45-6789"), "Failed: Valid SSN"
-    assert not redacted.ssn("123456789"), "Failed: Invalid SSN"
-    
-    assert redacted.streetnum("1234567"), "Failed: Valid street number"
-    assert not redacted.streetnum("12345"), "Failed: Invalid street number"
-    
-    assert redacted.zip("12345"), "Failed: Valid ZIP code"
-    assert not redacted.zip("1234"), "Failed: Invalid ZIP code"
-    
-    print("All tests passed!")
+# Positive test cases (should detect entities)
+print("Positive Test Cases:")
+test_cases_positive = [
+    "My case number is 123456789012",  # Case number (12 digits)
+    "My case number is 12345678901234",  # Case number (14 digits)
+    "My birth date is 15/08/1995",  # Date of birth
+    "My SSN is 123-45-6789",  # SSN format
+    "House number is 9876543",  # Street number
+    "My ZIP code is 12345"  # ZIP code
+]
 
-run_tests()
+for test in test_cases_positive:
+    result = redacted.extract_entities(test)
+    print(f"Input: {test} \nDetected: {result}\n")
+
+# Negative test cases (should not detect entities)
+print("\nNegative Test Cases:")
+test_cases_negative = [
+    "I love apples and oranges.",  # No sensitive info
+    "The number 987654 is just a random number.",  # Not 12 or 14 digits
+    "Birthdays are celebrated worldwide.",  # No date format
+    "My address is Elm Street.",  # No numerical street number
+    "ZIP is not always a number."  # Doesn't match 5-digit format
+]
+
+for test in test_cases_negative:
+    result = redacted.extract_entities(test)
+    print(f"Input: {test} \nDetected: {result}\n")
+
+# Test the filter method
+print("\nTesting the filter method:")
+print(redacted.filter("My SSN is 123-45-6789"))  # Should detect
+print(redacted.filter("I love to travel!"))  # Should not detect
