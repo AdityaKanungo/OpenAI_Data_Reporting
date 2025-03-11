@@ -10,7 +10,8 @@ class Redacted:
         
         # Define all patterns once in the constructor
         patterns = [
-            {"label": "CASENUM", "pattern": [{"TEXT": {"REGEX": r"^(?:\d{12}|\d{14})$"}}]},
+            {"label": "CASENUM", "pattern": [{"TEXT": {"REGEX": r"^\d{12}$"}}]},
+            {"label": "CASENUM", "pattern": [{"TEXT": {"REGEX": r"^\d{14}$"}}]},
             {"label": "DOB", "pattern": [{"TEXT": {"REGEX": r"^([0-9]|[12][0-9]|3[01])/([1-9]|1[0-2])/([0-9]{4})$"}}]},
             {"label": "SSN", "pattern": [{"TEXT": {"REGEX": r"^\d{3}\W\d{2}\W\d{4}$"}}]},
             {"label": "STREETNUM", "pattern": [{"TEXT": {"REGEX": r"^\d{3}\d{4}$"}}]},
