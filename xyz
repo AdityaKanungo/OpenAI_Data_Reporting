@@ -6,32 +6,36 @@ class Redacted:
     def __init__(self):
         self.nlp = spacy.load("en_core_web_sm")
         self.ruler = EntityRuler(self.nlp, overwrite_ents=True)
-        self.nlp.add_pipe(self.ruler)
+        self.nlp.add_pipe('entity_ruler')
+        
+        # Define all patterns once in the constructor
+        patterns = [
+            {"label": "CASENUM", "pattern": [{"TEXT": {"REGEX": r"^(?:\d{12}|\d{14})$"}}]},
+            {"label": "DOB", "pattern": [{"TEXT": {"REGEX": r"^([0-9]|[12][0-9]|3[01])/([1-9]|1[0-2])/([0-9]{4})$"}}]},
+            {"label": "SSN", "pattern": [{"TEXT": {"REGEX": r"^\d{3}\W\d{2}\W\d{4}$"}}]},
+            {"label": "STREETNUM", "pattern": [{"TEXT": {"REGEX": r"^\d{3}\d{4}$"}}]},
+            {"label": "ZIP", "pattern": [{"TEXT": {"REGEX": r"^\d{5}$"}}]}
+        ]
+        self.ruler.add_patterns(patterns)
+
+    def contains_entity(self, text, label):
+        doc = self.nlp(text)
+        return any(ent.label_ == label for ent in doc.ents)
     
     def casenum(self, text):
-        pattern = [{"label": "CASENUM", "pattern": [{"TEXT": {"REGEX": r"^\d{12}|\d{14}$"}}]}]
-        self.ruler.add_patterns(pattern)
-        return bool(self.nlp(text).ents)
-    
+        return self.contains_entity(text, "CASENUM")
+
     def birthday(self, text):
-        pattern = [{"label": "DOB", "pattern": [{"TEXT": {"REGEX": r"^([0-9]|[12][0-9]|3[01])/([1-9]|1[0-2])/([0-9]{4})$"}}]}]
-        self.ruler.add_patterns(pattern)
-        return bool(self.nlp(text).ents)
-    
+        return self.contains_entity(text, "DOB")
+
     def ssn(self, text):
-        pattern = [{"label": "SSN", "pattern": [{"TEXT": {"REGEX": r"^\d{3}\W\d{2}\W\d{4}$"}}]}]
-        self.ruler.add_patterns(pattern)
-        return bool(self.nlp(text).ents)
-    
+        return self.contains_entity(text, "SSN")
+
     def streetnum(self, text):
-        pattern = [{"label": "STREETNUM", "pattern": [{"TEXT": {"REGEX": r"^\d{3}\d{4}$"}}]}]
-        self.ruler.add_patterns(pattern)
-        return bool(self.nlp(text).ents)
-    
+        return self.contains_entity(text, "STREETNUM")
+
     def zip(self, text):
-        pattern = [{"label": "ZIP", "pattern": [{"TEXT": {"REGEX": r"^\d{5}$"}}]}]
-        self.ruler.add_patterns(pattern)
-        return bool(self.nlp(text).ents)
+        return self.contains_entity(text, "ZIP")
 
 def run_tests():
     redacted = Redacted()
