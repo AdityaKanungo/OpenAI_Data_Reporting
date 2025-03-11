@@ -5,18 +5,17 @@ from spacy.util import compile_infix_regex
 from spacy.matcher import Matcher
 import re
 
-# Original class
+# Original class with fixed tokenizer method
 class Redacted:
     def __init__(self, nlp):
         self.nlp = nlp
-        nlp = spacy.load("en_core_web_sm")
-        nlp.tokenizer = custom_tokenizer(nlp)
-        self.ruler = EntityRuler(nlp, overwrite_ents=True)
-        nlp.add_pipe("entity_ruler")
-        self.matcher = Matcher(nlp.vocab)
+        self.nlp.tokenizer = self.custom_tokenizer(self.nlp)
+        self.ruler = EntityRuler(self.nlp, overwrite_ents=True)
+        self.nlp.add_pipe(self.ruler, before="ner")
+        self.matcher = Matcher(self.nlp.vocab)
 
     # Customize tokenizer
-    def custom_tokenizer(nlp):
+    def custom_tokenizer(self, nlp):
         inf = list(nlp.Defaults.infixes)
         inf.remove(r"(?<=[0-9])\-(?=[0-9])")
         inf = tuple(inf)
@@ -33,31 +32,26 @@ class Redacted:
     def casenum(self):
         casenum_pattern = [{"label": "CASENUM", "pattern": [{"TEXT": {"REGEX": r"^\d{12}|\d{14}$"}}]}]
         self.ruler.add_patterns(casenum_pattern)
-        self.nlp.get_pipe("entity_ruler").add_patterns(casenum_pattern)
 
     # Filter out birthdate
     def birthday(self):
         bday_pattern = [{"label": "DOB", "pattern": [{"TEXT": {"REGEX": r"^([0-9]|[12][0-9]|3[01])/([1-9]|1[0-2])/([0-9]{4})$"}}]}]
         self.ruler.add_patterns(bday_pattern)
-        self.nlp.get_pipe("entity_ruler").add_patterns(bday_pattern)
 
     # Filter out SSN
     def ssn(self):
         ssn_pattern = [{"label": "SSN", "pattern": [{"TEXT": {"REGEX": r"^\d{3}\W\d{2}\W\d{4}$"}}]}]
         self.ruler.add_patterns(ssn_pattern)
-        self.nlp.get_pipe("entity_ruler").add_patterns(ssn_pattern)
 
     # Filter out address
     def streetnum(self):
         streetnum_pattern = [{"label": "STREETNUM", "pattern": [{"TEXT": {"REGEX": r"^\d{3}\d{4}$"}}]}]
         self.ruler.add_patterns(streetnum_pattern)
-        self.nlp.get_pipe("entity_ruler").add_patterns(streetnum_pattern)
 
     # Filter out ZIP code
     def zip(self):
         zip_pattern = [{"label": "ZIP", "pattern": [{"TEXT": {"REGEX": r"^\d{5}$"}}]}]
         self.ruler.add_patterns(zip_pattern)
-        self.nlp.get_pipe("entity_ruler").add_patterns(zip_pattern)
 
     # Process input text and return detected entities
     def extract_entities(self, text):
@@ -67,7 +61,7 @@ class Redacted:
     # Execute to check if any sensitive entity is detected
     def filter(self, text):
         labeled_text = self.extract_entities(text)
-        if any(re.findall(r'PERSON|DOB|SSN|CASENUM|STREETNUM|ZIP', str(labeled_text), re.IGNORECASE)):
+        if any(re.findall(r'CASENUM|DOB|SSN|STREETNUM|ZIP', str(labeled_text), re.IGNORECASE)):
             return "Possible matches found"
         else:
             return "No matches found"
