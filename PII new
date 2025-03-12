@@ -5,18 +5,19 @@ from spacy.util import compile_infix_regex
 import re
 
 def custom_tokenizer(nlp):
-    # Remove the infix rule for numbers to avoid splitting on hyphens.
-    inf = list(nlp.Defaults.infixes)
-    if r"(?<=[0-9])\-(?=[0-9])" in inf:
-        inf.remove(r"(?<=[0-9])\-(?=[0-9])")
+    # Remove any infix that contains a hyphen between digits.
+    inf = [pattern for pattern in nlp.Defaults.infixes if "(?<=[0-9])-(?=[0-9])" not in pattern]
     inf = tuple(inf)
     infix_re = compile_infix_regex(inf)
-    return Tokenizer(nlp.vocab,
-                     prefix_search=nlp.tokenizer.prefix_search,
-                     suffix_search=nlp.tokenizer.suffix_search,
-                     infix_finditer=infix_re.finditer,
-                     token_match=nlp.tokenizer.token_match,
-                     rules=nlp.Defaults.tokenizer_exceptions)
+    return Tokenizer(
+        nlp.vocab,
+        prefix_search=nlp.tokenizer.prefix_search,
+        suffix_search=nlp.tokenizer.suffix_search,
+        infix_finditer=infix_re.finditer,
+        token_match=nlp.tokenizer.token_match,
+        rules=nlp.Defaults.tokenizer_exceptions
+    )
+
 
 class Redacted:
     def __init__(self):
