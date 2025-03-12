@@ -1,0 +1,54 @@
+# Assume the Redacted class is defined in the same module or imported appropriately.
+
+def run_tests():
+    redactor = Redacted()
+    redactor.add_patterns()
+    
+    passed = 0
+    failed = 0
+
+    # Helper functions for checking positive and negative cases.
+    def check_positive(description, text, expected_label):
+        nonlocal passed, failed
+        doc = redactor.process_text(text)
+        labels = [ent.label_ for ent in doc.ents]
+        if expected_label in labels:
+            print(f"PASSED: {description}")
+            passed += 1
+        else:
+            print(f"FAILED: {description} -- Expected '{expected_label}' in {labels}")
+            failed += 1
+
+    def check_negative(description, text, unexpected_label):
+        nonlocal passed, failed
+        doc = redactor.process_text(text)
+        labels = [ent.label_ for ent in doc.ents]
+        if unexpected_label not in labels:
+            print(f"PASSED: {description}")
+            passed += 1
+        else:
+            print(f"FAILED: {description} -- Unexpected '{unexpected_label}' found in {labels}")
+            failed += 1
+
+    # --- Positive Test Cases ---
+    check_positive("Casenum positive (12 digits)", "Case number: 123456789012", "CASENUM")
+    check_positive("Casenum positive (14 digits)", "Case number: 12345678901234", "CASENUM")
+    check_positive("Birthday positive standard", "Birthday: 12/04/1980", "DOB")
+    check_positive("Birthday positive single-digit day and month", "Birthday: 1/4/2000", "DOB")
+    check_positive("SSN positive with hyphens", "SSN: 123-45-6789", "SSN")
+    check_positive("Streetnum positive", "Street number: 12345", "STREETNUM")
+    check_positive("ZIP positive", "Zip: 12345", "ZIP")
+    check_positive("Person positive", "John Doe went to the store.", "PERSON")
+
+    # --- Negative Test Cases ---
+    check_negative("Casenum negative (11 digits)", "Case number: 12345678901", "CASENUM")
+    check_negative("Birthday negative (invalid day)", "Birthday: 32/04/1980", "DOB")
+    check_negative("SSN negative (missing delimiters)", "SSN: 123456789", "SSN")
+    check_negative("Streetnum negative (too short)", "Street number: 12", "STREETNUM")
+    check_negative("ZIP negative (too short)", "Zip: 1234", "ZIP")
+
+    print(f"\nTotal Passed: {passed} | Total Failed: {failed}")
+
+
+if __name__ == '__main__':
+    run_tests()
