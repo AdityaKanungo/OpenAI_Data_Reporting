@@ -1,0 +1,78 @@
+import spacy
+from spacy.tokenizer import Tokenizer
+from spacy.pipeline import EntityRuler
+from spacy.util import compile_infix_regex
+import re
+
+def custom_tokenizer(nlp):
+    # Take out the existing infix rule for numbers to avoid splitting on hyphens.
+    inf = list(nlp.Defaults.infixes)
+    if r"(?<=[0-9])\-(?=[0-9])" in inf:
+        inf.remove(r"(?<=[0-9])\-(?=[0-9])")
+    inf = tuple(inf)
+    infix_re = compile_infix_regex(inf)
+    return Tokenizer(nlp.vocab,
+                     prefix_search=nlp.tokenizer.prefix_search,
+                     suffix_search=nlp.tokenizer.suffix_search,
+                     infix_finditer=infix_re.finditer,
+                     token_match=nlp.tokenizer.token_match,
+                     rules=nlp.Defaults.tokenizer_exceptions)
+
+class Redacted:
+    def __init__(self):
+        # Load the SpaCy model and replace the tokenizer with our custom one.
+        self.nlp = spacy.load("en_core_web_sm")
+        self.nlp.tokenizer = custom_tokenizer(self.nlp)
+        # Add an EntityRuler to the pipeline to detect PII entities.
+        self.nlp.add_pipe("entity_ruler")
+    
+    def add_patterns(self):
+        # Add all PII patterns to the entity ruler.
+        self._add_casenum_pattern()
+        self._add_birthday_pattern()
+        self._add_ssn_pattern()
+        self._add_streetnum_pattern()
+        self._add_zip_pattern()
+    
+    def _add_casenum_pattern(self):
+        # Pattern to match either 12 or 14 digits.
+        casenum_pattern = [{"label": "CASENUM", "pattern": [{"TEXT": {"REGEX": r"^\d{12}$|^\d{14}$"}}]}]
+        self.nlp.get_pipe("entity_ruler").add_patterns(casenum_pattern)
+    
+    def _add_birthday_pattern(self):
+        # Updated regex to properly match dates in day/month/year format.
+        bday_pattern = [{"label": "DOB", "pattern": [{"TEXT": {"REGEX": r"^(0?[1-9]|[12][0-9]|3[01])/(0?[1-9]|1[0-2])/[0-9]{4}$"}}]}]
+        self.nlp.get_pipe("entity_ruler").add_patterns(bday_pattern)
+    
+    def _add_ssn_pattern(self):
+        ssn_pattern = [{"label": "SSN", "pattern": [{"TEXT": {"REGEX": r"^\d{3}\W\d{2}\W\d{4}$"}}]}]
+        self.nlp.get_pipe("entity_ruler").add_patterns(ssn_pattern)
+    
+    def _add_streetnum_pattern(self):
+        # Adjusted pattern for street numbers: 3 to 7 digits.
+        streetnum_pattern = [{"label": "STREETNUM", "pattern": [{"TEXT": {"REGEX": r"^\d{3,7}$"}}]}]
+        self.nlp.get_pipe("entity_ruler").add_patterns(streetnum_pattern)
+    
+    def _add_zip_pattern(self):
+        zip_pattern = [{"label": "ZIP", "pattern": [{"TEXT": {"REGEX": r"^\d{5}$"}}]}]
+        self.nlp.get_pipe("entity_ruler").add_patterns(zip_pattern)
+    
+    def process_text(self, text):
+        # Process the input text through the NLP pipeline.
+        return self.nlp(text)
+    
+    def filter(self, doc):
+        # Extract entities and check for any PII labels.
+        labeled_text = [(ent.text, ent.label_) for ent in doc.ents]
+        if any(re.findall(r'PERSON|DOB|SSN|CASENUM|STREETNUM|ZIP', str(labeled_text), re.IGNORECASE)):
+            print("Possible PII matches found in the text:")
+            print(labeled_text)
+        else:
+            print("No PII matches found.")
+
+if __name__ == "__main__":
+    user_query = input("Enter text: ")
+    redactor = Redacted()
+    redactor.add_patterns()
+    doc = redactor.process_text(user_query)
+    redactor.filter(doc)
