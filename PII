@@ -23,8 +23,8 @@ class Redacted:
         # Load the SpaCy model and replace the tokenizer with our custom one.
         self.nlp = spacy.load("en_core_web_sm")
         self.nlp.tokenizer = custom_tokenizer(self.nlp)
-        # Add an EntityRuler to the pipeline to detect PII entities.
-        self.nlp.add_pipe("entity_ruler")
+        # Add an EntityRuler configured to overwrite existing entities.
+        self.nlp.add_pipe("entity_ruler", config={"overwrite_ents": True}, before="ner")
     
     def add_patterns(self):
         # Add all PII patterns to the entity ruler.
