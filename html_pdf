@@ -1,26 +1,26 @@
-import pdfkit
+from bs4 import BeautifulSoup
+from fpdf import FPDF
 
-def html_file_to_pdf(html_file_path: str, output_pdf: str) -> None:
-    """
-    Converts an HTML file from a given location into a PDF file.
+# Read the HTML file
+with open("file.html", "r", encoding="utf-8") as f:
+    html_content = f.read()
 
-    Args:
-        html_file_path (str): The path to the input HTML file.
-        output_pdf (str): The path to the output PDF file.
-    """
-    try:
-        # Read the HTML file content.
-        with open(html_file_path, 'r', encoding='utf-8') as file:
-            html_content = file.read()
-        
-        # Convert the HTML content to a PDF file.
-        pdfkit.from_string(html_content, output_pdf)
-        print(f"PDF successfully created at: {output_pdf}")
-    except Exception as e:
-        print(f"An error occurred while converting HTML to PDF: {e}")
+# Parse the HTML and extract the text content
+soup = BeautifulSoup(html_content, "html.parser")
+text = soup.get_text(separator='\n')
 
-# Example usage:
-if __name__ == "__main__":
-    input_html_file = "path/to/your/input.html"  # Replace with your HTML file path
-    output_pdf_file = "output.pdf"               # Replace with desired PDF output path
-    html_file_to_pdf(input_html_file, output_pdf_file)
+# Create a PDF document
+pdf = FPDF()
+pdf.add_page()
+
+# Add a Unicode-supporting font. Ensure 'DejaVuSans.ttf' is in your working directory.
+pdf.add_font("DejaVu", "", "DejaVuSans.ttf", uni=True)
+pdf.set_font("DejaVu", size=12)
+
+# Add each line of text into the PDF
+for line in text.split('\n'):
+    if line.strip():
+        pdf.cell(0, 10, txt=line, ln=True)
+
+# Save the PDF file
+pdf.output("output.pdf")
