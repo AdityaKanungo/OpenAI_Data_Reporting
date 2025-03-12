@@ -23,7 +23,7 @@ class Redacted:
         # Load the SpaCy model and replace the tokenizer.
         self.nlp = spacy.load("en_core_web_sm")
         self.nlp.tokenizer = custom_tokenizer(self.nlp)
-        # Add the EntityRuler at the end of the pipeline.
+        # Add an EntityRuler after the NER so that its patterns override default predictions.
         self.nlp.add_pipe("entity_ruler", config={"overwrite_ents": True}, last=True)
     
     def add_patterns(self):
@@ -34,44 +34,56 @@ class Redacted:
         self._add_zip_pattern()
     
     def _add_casenum_pattern(self):
+        # Pattern to match exactly 12 or 14 digits.
         casenum_pattern = [{
             "label": "CASENUM",
-            "pattern": [{"TEXT": {"REGEX": r"^\d{12}$|^\d{14}$"}}]
+            "pattern": [{"TEXT": {"REGEX": r"^\d{12}$|^\d{14}$"}}],
+            "priority": 100
         }]
         self.nlp.get_pipe("entity_ruler").add_patterns(casenum_pattern)
     
     def _add_birthday_pattern(self):
+        # Pattern to match dates in day/month/year format.
         bday_pattern = [{
             "label": "DOB",
-            "pattern": [{"TEXT": {"REGEX": r"^(0?[1-9]|[12][0-9]|3[01])/(0?[1-9]|1[0-2])/[0-9]{4}$"}}]
+            "pattern": [{"TEXT": {"REGEX": r"^(0?[1-9]|[12][0-9]|3[01])/(0?[1-9]|1[0-2])/[0-9]{4}$"}}],
+            "priority": 100
         }]
         self.nlp.get_pipe("entity_ruler").add_patterns(bday_pattern)
     
     def _add_ssn_pattern(self):
+        # Pattern for SSN: 3 digits, a non-word character, 2 digits, a non-word character, 4 digits.
         ssn_pattern = [{
             "label": "SSN",
-            "pattern": [{"TEXT": {"REGEX": r"^\d{3}\W\d{2}\W\d{4}$"}}]
+            "pattern": [{"TEXT": {"REGEX": r"^\d{3}\W\d{2}\W\d{4}$"}}],
+            "priority": 100
         }]
         self.nlp.get_pipe("entity_ruler").add_patterns(ssn_pattern)
     
     def _add_streetnum_pattern(self):
+        # Pattern for street numbers: 3 to 7 digits.
         streetnum_pattern = [{
             "label": "STREETNUM",
-            "pattern": [{"TEXT": {"REGEX": r"^\d{3,7}$"}}]
+            "pattern": [{"TEXT": {"REGEX": r"^\d{3,7}$"}}],
+            "priority": 50
         }]
         self.nlp.get_pipe("entity_ruler").add_patterns(streetnum_pattern)
     
     def _add_zip_pattern(self):
+        # Pattern for ZIP codes: exactly 5 digits.
         zip_pattern = [{
             "label": "ZIP",
-            "pattern": [{"TEXT": {"REGEX": r"^\d{5}$"}}]
+            "pattern": [{"TEXT": {"REGEX": r"^\d{5}$"}}],
+            "priority": 50
         }]
         self.nlp.get_pipe("entity_ruler").add_patterns(zip_pattern)
     
     def process_text(self, text):
+        # Process the input text through the NLP pipeline.
         return self.nlp(text)
     
     def filter(self, doc):
+        # Extract entities and print them if any PII-related labels are found.
         labeled_text = [(ent.text, ent.label_) for ent in doc.ents]
         if any(re.findall(r'PERSON|DOB|SSN|CASENUM|STREETNUM|ZIP', str(labeled_text), re.IGNORECASE)):
             print("Possible PII matches found in the text:")
