@@ -1,0 +1,23 @@
+from bs4 import BeautifulSoup
+from fpdf import FPDF
+
+# Read the HTML file
+with open("file.html", "r", encoding="utf-8") as f:
+    html_content = f.read()
+
+# Parse the HTML and extract the text content
+soup = BeautifulSoup(html_content, "html.parser")
+text = soup.get_text(separator='\n')  # Using separator to retain some line breaks
+
+# Create a PDF document
+pdf = FPDF()
+pdf.add_page()
+pdf.set_font("Arial", size=12)
+
+# Add each line of text into the PDF
+for line in text.split('\n'):
+    if line.strip():  # add only non-empty lines
+        pdf.cell(0, 10, txt=line, ln=True)
+
+# Save the PDF file
+pdf.output("output.pdf")
