@@ -1,100 +1,56 @@
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 from scipy.stats import ttest_ind, mannwhitneyu
 
-# Load your data (assuming it's in CSV)
-df = pd.read_csv('your_data.csv')
+# Sample structure of data
+# df.columns = ['Date', 'Weekday', 'Hold_Time', 'Call_Center']
 
-# Convert Day to datetime
-df['Day'] = pd.to_datetime(df['Day'])
+# Ensure correct date format
+df['Date'] = pd.to_datetime(df['Date'])
 
-# Extract Weekday
-df['Weekday'] = df['Day'].dt.day_name()
+# Add Year-Week column to identify each week uniquely
+df['Year_Week'] = df['Date'].dt.strftime('%Y-%U')
 
-# Preview the data
-print(df.head())
+# Calculate Monday hold time per week
+monday_df = df[df['Weekday'] == 'Monday'].groupby('Year_Week').agg(Monday_Hold_Time=('Hold_Time', 'sum')).reset_index()
 
-# Check for missing values
-print(df.isna().sum())
+# Calculate average daily hold time from Tuesday to Friday per week
+tue_fri_df = df[df['Weekday'].isin(['Tuesday', 'Wednesday', 'Thursday', 'Friday'])] \
+                .groupby('Year_Week') \
+                .agg(Tue_Fri_Avg_Hold_Time=('Hold_Time', 'mean')) \
+                .reset_index()
 
-# Simple EDA: Boxplot of avg_hold_time per weekday
-plt.figure(figsize=(12, 6))
-sns.boxplot(x='Weekday', y='avg_hold_time', data=df,
-            order=['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'])
-plt.title('Average Hold Time by Weekday')
-plt.xticks(rotation=45)
-plt.show()
+# Merge dataframes
+weekly_df = pd.merge(monday_df, tue_fri_df, on='Year_Week')
 
-# Line plot to visualize trends over time
-df.set_index('Day')['avg_hold_time'].plot(figsize=(15, 5), title='Avg Hold Time Over Time')
-plt.xlabel('Date')
-plt.ylabel('Avg Hold Time')
-plt.show()
+# Determine median Monday hold time for categorization
+median_monday_hold = weekly_df['Monday_Hold_Time'].median()
 
+# Categorize each week
+weekly_df['Monday_Category'] = np.where(weekly_df['Monday_Hold_Time'] > median_monday_hold, 'High Monday', 'Low Monday')
 
+# Separate data into two groups
+high_monday_group = weekly_df[weekly_df['Monday_Category'] == 'High Monday']['Tue_Fri_Avg_Hold_Time']
+low_monday_group = weekly_df[weekly_df['Monday_Category'] == 'Low Monday']['Tue_Fri_Avg_Hold_Time']
 
-# Mark Monday's avg_hold_time as high or low relative to week's average
-df['YearWeek'] = df['Day'].dt.strftime('%Y-%U')
+# Perform two-sample t-test
+t_stat, p_value = ttest_ind(high_monday_group, low_monday_group, equal_var=False)
 
-# Calculate weekly average excluding Monday
-weekly_avg_excl_monday = df[df['Weekday'] != 'Monday'].groupby('YearWeek')['avg_hold_time'].mean().reset_index()
-weekly_avg_excl_monday.columns = ['YearWeek', 'WeeklyAvgExclMonday']
+print("Two-Sample T-Test Results")
+print(f"T-statistic: {t_stat:.4f}, P-value: {p_value:.4f}")
 
-# Merge with original df
-df = df.merge(weekly_avg_excl_monday, on='YearWeek', how='left')
+# Check normality assumption to decide if non-parametric test is needed
+from scipy.stats import shapiro
 
-# Flag Monday as High or Low relative to rest of week
-def monday_flag(row):
-    if row['Weekday'] == 'Monday':
-        return 'High' if row['avg_hold_time'] > row['WeeklyAvgExclMonday'] else 'Low'
-    else:
-        return np.nan
+_, p_high = shapiro(high_monday_group)
+_, p_low = shapiro(low_monday_group)
 
-df['MondayFlag'] = df.apply(monday_flag, axis=1)
+print("\nShapiro-Wilk Normality Test")
+print(f"High Monday group normality p-value: {p_high:.4f}")
+print(f"Low Monday group normality p-value: {p_low:.4f}")
 
-# Forward-fill the MondayFlag to propagate throughout the week
-df['MondayFlag'] = df.groupby('YearWeek')['MondayFlag'].ffill()
-
-print(df.head(10))
-
-
-# Prepare datasets
-high_monday_rest = df[(df['MondayFlag'] == 'High') & (df['Weekday'] != 'Monday')]['avg_hold_time']
-low_monday_rest = df[(df['MondayFlag'] == 'Low') & (df['Weekday'] != 'Monday')]['avg_hold_time']
-
-# Check distribution normality visually
-plt.figure(figsize=(10,5))
-sns.histplot(high_monday_rest, kde=True, color='blue', label='Rest of Week (High Monday)')
-sns.histplot(low_monday_rest, kde=True, color='orange', label='Rest of Week (Low Monday)')
-plt.legend()
-plt.title("Distribution of Avg Hold Time for Rest of Week (by Monday's Avg Hold Time)")
-plt.show()
-
-# Test variance and normality assumption
-print('Mean and Std deviation:')
-print('High Monday Rest of Week:', high_monday_rest.mean(), high_monday_rest.std())
-print('Low Monday Rest of Week:', low_monday_rest.mean(), low_monday_rest.std())
-
-# Perform t-test (if distributions appear roughly normal and variance similar)
-ttest_result = ttest_ind(high_monday_rest, low_monday_rest, equal_var=False)
-print("T-Test Result:")
-print("T-statistic:", ttest_result.statistic, "P-value:", ttest_result.pvalue)
-
-# If non-normal or distributions unclear, perform Mann-Whitney U Test (non-parametric)
-mw_result = mannwhitneyu(high_monday_rest, low_monday_rest, alternative='two-sided')
-print("Mann-Whitney U Test Result:")
-print("U-statistic:", mw_result.statistic, "P-value:", mw_result.pvalue)
-
-# Interpretation
-alpha = 0.05
-if ttest_result.pvalue < alpha:
-    print("The difference is statistically significant based on T-test (p < 0.05).")
-else:
-    print("No significant difference based on T-test (p >= 0.05).")
-
-if mw_result.pvalue < alpha:
-    print("The difference is statistically significant based on Mann-Whitney U test (p < 0.05).")
-else:
-    print("No significant difference based on Mann-Whitney U test (p >= 0.05).")
+# If normality fails (p<0.05), perform Mann-Whitney U Test
+if p_high < 0.05 or p_low < 0.05:
+    u_stat, u_p_value = mannwhitneyu(high_monday_group, low_monday_group, alternative='two-sided')
+    print("\nMann-Whitney U Test Results")
+    print(f"U-statistic: {u_stat:.4f}, P-value: {u_p_value:.4f}")
