@@ -29,3 +29,49 @@ import statsmodels.api as sm
 X = sm.add_constant(weekly['first_value'])
 model = sm.OLS(weekly['rest_avg'], X).fit()
 print(model.summary())
+------------------------------------------
+
+
+
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.stats import pearsonr
+import statsmodels.api as sm
+
+# ─── Assume you’ve already built `weekly` and `model` as before ───
+
+# 1️⃣ Plot scatter + regression line
+X = sm.add_constant(weekly['first_value'])
+weekly['predicted'] = model.predict(X)
+
+plt.figure()
+plt.scatter(weekly['first_value'], weekly['rest_avg'])
+plt.plot(weekly['first_value'], weekly['predicted'])
+plt.xlabel('Monday Calls/hr')
+plt.ylabel('Avg Tue–Fri Calls/hr')
+plt.title('Trend: First Day → Rest of Week')
+plt.show()
+
+# 2️⃣ Pearson correlation
+corr, pval = pearsonr(weekly['first_value'], weekly['rest_avg'])
+print(f'Pearson r = {corr:.3f}, p-value = {pval:.4f}')
+
+# 3️⃣ Residual distribution
+weekly['residual'] = weekly['rest_avg'] - weekly['predicted']
+plt.figure()
+weekly['residual'].hist(bins=30)
+plt.title('Residuals: Rest‑Of‑Week vs Predicted')
+plt.xlabel('Residual')
+plt.ylabel('Count')
+plt.show()
+
+# 4️⃣ Seasonality check by month
+weekly['month'] = weekly['Week'].dt.month
+monthly_means = weekly.groupby('month')[['first_value','rest_avg']].mean()
+print("\nMonthly average first-day vs rest-week calls/hr:")
+print(monthly_means)
+
+# 5️⃣ Outlier sensitivity — drop weeks where Monday > 8 calls/hr
+filtered = weekly[weekly['first_value'] <= 8]
+corr2, pval2 = pearsonr(filtered['first_value'], filtered['rest_avg'])
+print(f'\nAfter dropping >8 calls/hr Mondays: Pearson r = {corr2:.3f}, p = {pval2:.4f}')
