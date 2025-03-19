@@ -1,0 +1,31 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import pearsonr
+
+# 1️⃣ Read + preprocess
+df = pd.read_csv('your_data.csv', parse_dates=['Date'])
+df['Week'] = df['Date'].dt.to_period('W-MON')  # Weeks starting Monday
+
+# 2️⃣ Aggregate per week
+weekly = df.groupby('Week').apply(lambda g: pd.Series({
+    'first_value': g.sort_values('Date')['Actual Calls Per Hour'].iloc[0],
+    'rest_avg': g.sort_values('Date')['Actual Calls Per Hour'].iloc[1:].mean()
+})).reset_index()
+
+# 3️⃣ Visualize relationship
+plt.figure()
+plt.scatter(weekly['first_value'], weekly['rest_avg'])
+plt.xlabel('First‑Day Calls/hr')
+plt.ylabel('Average Rest‑Of‑Week Calls/hr')
+plt.title('Backlog Analysis: First Day vs Rest of Week')
+plt.show()
+
+# 4️⃣ Correlation & regression
+corr, pval = pearsonr(weekly['first_value'], weekly['rest_avg'])
+print(f'Pearson r = {corr:.3f}, p‑value = {pval:.4f}')
+
+import statsmodels.api as sm
+X = sm.add_constant(weekly['first_value'])
+model = sm.OLS(weekly['rest_avg'], X).fit()
+print(model.summary())
