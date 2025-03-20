@@ -1,0 +1,138 @@
+import streamlit as st
+
+# Set character limit
+CHAR_LIMIT = 200
+
+st.title("Live Character Counter")
+
+st.components.v1.html(
+    f"""
+    <style>
+        .text-container {{
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }}
+
+        #text_area {{
+            width: 95%;
+            height: 120px;
+            padding: 10px;
+            font-size: 16px;
+            font-family: 'Inter', sans-serif;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.3s ease-in-out;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }}
+
+        #text_area:focus {{
+            border-color: #FF4B4B;
+            box-shadow: 0 2px 8px rgba(76, 175, 80, 0.4);
+        }}
+
+        #char_count {{
+            margin-top: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #FF4B4B;
+            font-family: 'Inter', sans-serif;
+        }}
+
+        /* Default warning banner style */
+        #char_limit_warning {{
+            background-color: #fff8d4;  /* Pale yellow */
+            color: #8a6d3b;             /* Golden-brown text */
+            border: 1px solid #ffeeba;  /* Light yellow border */
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+            max-width: 400px;
+            font-family: 'Inter', sans-serif;
+            display: none;
+        }}
+
+        /* Style for the submit button */
+        #submit_button {{
+            margin-top: 15px;
+            padding: 10px 20px;
+            font-size: 16px;
+            font-family: 'Inter', sans-serif;
+            border: none;
+            border-radius: 5px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+        }}
+
+        #submit_button:hover {{
+            background-color: #45a049;
+        }}
+    </style>
+
+    <div class="text-container">
+        <textarea id="text_area" placeholder="Type here..."></textarea>
+        <p id="char_count">Character count: 0</p>
+        <p id="char_limit_warning"></p>
+        <button id="submit_button">Submit</button>
+    </div>
+
+    <script>
+        let textArea = document.getElementById("text_area");
+        let charCountEl = document.getElementById("char_count");
+        let warningEl = document.getElementById("char_limit_warning");
+        let submitButton = document.getElementById("submit_button");
+        let charLimit = {CHAR_LIMIT};
+
+        // Function to set the default warning style
+        function setWarningStyle() {{
+            warningEl.style.backgroundColor = "#fff8d4";  // Pale yellow
+            warningEl.style.color = "#8a6d3b";
+            warningEl.style.borderColor = "#ffeeba";
+        }}
+
+        // Function to set the error style on submit click
+        function setErrorStyle() {{
+            warningEl.style.backgroundColor = "#ffcccb";  // Light pink
+            warningEl.style.color = "#a94442";
+            warningEl.style.borderColor = "#ebccd1";
+        }}
+
+        // Update character count live as user types
+        textArea.addEventListener("input", function() {{
+            let charCount = this.value.length;
+            charCountEl.innerText = "Character count: " + charCount;
+
+            if (charCount > charLimit) {{
+                // Show warning message with default style when over limit
+                setWarningStyle();
+                warningEl.style.display = "block";
+                warningEl.innerText = "Your question is currently " + charCount + 
+                    " characters. This is over the " + charLimit + 
+                    " character limit. Please reduce the length before submitting.";
+            }} else {{
+                warningEl.style.display = "none";
+            }}
+        }});
+
+        // On submit click, if over limit, update to error style and message
+        submitButton.addEventListener("click", function() {{
+            let charCount = textArea.value.length;
+            if (charCount > charLimit) {{
+                setErrorStyle();
+                warningEl.style.display = "block";
+                warningEl.innerText = "Your question is currently " + charCount + 
+                    " characters. This is over the " + charLimit + 
+                    " character limit and cannot be submitted. Please reduce the word count before submit.";
+            }} else {{
+                warningEl.style.display = "none";
+                alert("Submitted successfully!");
+            }}
+        }});
+    </script>
+    """,
+    height=500
+)
