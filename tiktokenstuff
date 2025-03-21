@@ -16,7 +16,7 @@ def extract_text_from_pdf(pdf_path):
                 pdf_text += page_text + "\n"
     return pdf_text
 
-def get_tokens_from_text(text, model="gpt-4"):
+def get_tokens_from_text(text, model="o200k_base"):
     """
     Encode text into tokens using tiktoken for the specified model.
     Returns both the list of tokens and the encoder.
@@ -31,7 +31,7 @@ def extract_random_overlapping_chunks(tokens, chunk_size, num_chunks):
     
     Each chunk will be exactly `chunk_size` tokens. For each subsequent chunk,
     a new starting index is randomly chosen from a range that ensures some overlap 
-    with the previous chunk. If the PDF tokens are insufficient to extract all chunks,
+    with the previous chunk. If there aren't enough tokens to extract all chunks,
     the function returns as many chunks as possible.
     """
     tokens_count = len(tokens)
@@ -42,12 +42,11 @@ def extract_random_overlapping_chunks(tokens, chunk_size, num_chunks):
     # Choose an initial random start so the chunk fits within the token list.
     current_start = random.randint(0, tokens_count - chunk_size)
     for _ in range(num_chunks):
-        # Extract chunk of exact chunk_size tokens
+        # Extract chunk of exactly chunk_size tokens.
         chunk = tokens[current_start: current_start + chunk_size]
         chunks.append(chunk)
         
-        # Calculate the range for the next start index to force some overlap.
-        # We ensure that the next chunk also fits entirely.
+        # Determine the range for the next starting index to force overlap.
         lower_bound = current_start + 1
         upper_bound = min(current_start + chunk_size - 1, tokens_count - chunk_size)
         
@@ -59,10 +58,11 @@ def extract_random_overlapping_chunks(tokens, chunk_size, num_chunks):
     return chunks
 
 def main():
-    model = "gpt-4"  # Use GPT-4 (or substitute with "gpt40 mini" if available)
+    # Use the "o200k_base" model for tokenization.
+    model = "o200k_base"
     pdf_path = "sample.pdf"  # Replace with the path to your PDF file.
     
-    # Extract text from the PDF and get its tokens.
+    # Extract text from the PDF and tokenize using o200k_base.
     pdf_text = extract_text_from_pdf(pdf_path)
     tokens, encoder = get_tokens_from_text(pdf_text, model=model)
     total_pdf_tokens = len(tokens)
@@ -86,7 +86,7 @@ def main():
             chunks = extract_random_overlapping_chunks(tokens, cs, num_chunks)
             # Calculate total tokens in the dynamic chunks.
             dynamic_total = sum(len(chunk) for chunk in chunks)
-            # TPM = fixed tokens + dynamic tokens
+            # TPM = fixed tokens + dynamic tokens.
             tpm = fixed_total + dynamic_total
             tpm_values.append(tpm)
         tpm_data[f"{cs} tokens/chunk"] = tpm_values
