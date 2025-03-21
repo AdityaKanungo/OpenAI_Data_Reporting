@@ -162,3 +162,97 @@ print(tuefri_df.head())
 # ================================
 # With these correctly aggregated metrics, you can now proceed to compare Monday vs. Tue-Fri performance,
 # run regression models, perform feature importance analysis, and more.
+
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import statsmodels.api as sm
+from sklearn.ensemble import RandomForestRegressor
+
+# ================================
+# 7. Further Analysis: Compare Monday vs. Tue-Fri Performance
+# ================================
+
+# Merge Monday and Tuesday-Friday aggregated metrics (from steps 1-6)
+# (monday_df and tuefri_df are assumed to be defined from previous steps)
+# Rename columns to reflect the period, then join on Week_number.
+monday_df_renamed = monday_df.add_suffix('_Mon')
+tuefri_df_renamed = tuefri_df.add_suffix('_TF')
+combined_df = monday_df_renamed.join(tuefri_df_renamed, how='inner')
+
+print("Combined Monday and Tuesday-Friday Metrics (by Week):")
+print(combined_df.head())
+
+# Example: Scatter plot for 'Entered' call volume
+plt.figure(figsize=(8, 6))
+plt.scatter(combined_df['Entered_Mon'], combined_df['Entered_TF'], alpha=0.7)
+plt.xlabel("Monday 'Entered' Calls")
+plt.ylabel("Tuesday-Friday 'Entered' Calls")
+plt.title("Monday vs. Tue-Fri 'Entered' Call Volume")
+plt.grid(True)
+plt.show()
+
+# Calculate and print the correlation between Monday and Tue-Fri 'Entered' call volumes
+corr_entered = combined_df['Entered_Mon'].corr(combined_df['Entered_TF'])
+print(f"Correlation between Monday and Tue-Fri 'Entered' calls: {corr_entered:.2f}")
+
+# ================================
+# 8. Regression Analysis: Predicting Tue-Fri Performance from Monday Metrics
+# ================================
+# Here, we use multiple Monday features to predict the Tuesday-Friday average 'Entered' call volume.
+# Define predictors from Monday metrics:
+predictors = [
+    'Entered_Mon', 'Offered_Mon', 'Accepted_Mon', 
+    'avg_accept_time_Mon', 'avg_handle_time_Mon', 'avg_wrap_time_Mon', 
+    'avh_hold_time_Mon', 'avg_distribute_time_Mon', 
+    'abandon_rate_Mon', 'conversion_rate_offered_Mon', 
+    'conversion_rate_entered_Mon', 'distribution_efficiency_Mon'
+]
+
+# Drop any rows with missing values in the chosen columns
+model_data = combined_df.dropna(subset=predictors + ['Entered_TF'])
+X = model_data[predictors]
+y = model_data['Entered_TF']
+
+# Add a constant for the intercept and run an OLS regression
+X_const = sm.add_constant(X)
+reg_model = sm.OLS(y, X_const).fit()
+print("\nRegression Results: Predicting Tue-Fri 'Entered' Calls from Monday Metrics")
+print(reg_model.summary())
+
+# ================================
+# 9. Feature Importance Analysis using Random Forest
+# ================================
+# Use a Random Forest regressor to determine which Monday features are most important in predicting Tuesday-Friday performance.
+rf_model = RandomForestRegressor(random_state=42, n_estimators=100)
+rf_model.fit(X, y)
+importances = rf_model.feature_importances_
+
+# Create a DataFrame for feature importances and sort them
+feature_importance_df = pd.DataFrame({
+    'Feature': predictors,
+    'Importance': importances
+}).sort_values(by='Importance', ascending=False)
+
+print("\nRandom Forest Feature Importances:")
+print(feature_importance_df)
+
+# Plot feature importances as a bar chart
+plt.figure(figsize=(10, 6))
+plt.bar(feature_importance_df['Feature'], feature_importance_df['Importance'], color='skyblue')
+plt.xlabel("Monday Metrics")
+plt.ylabel("Importance Score")
+plt.title("Feature Importance for Predicting Tue-Fri 'Entered' Calls")
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.show()
+
+# ================================
+# Additional Analysis Ideas:
+# ================================
+# - Repeat similar analysis for other target metrics (e.g., 'Accepted', 'abandon_rate').
+# - Create composite performance scores by combining several KPIs.
+# - Use clustering techniques on the weekly aggregated metrics to identify patterns.
+# - Conduct time series analysis to observe trends over months or quarters.
+
