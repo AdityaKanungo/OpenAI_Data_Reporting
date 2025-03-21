@@ -16,12 +16,13 @@ def extract_text_from_pdf(pdf_path):
                 pdf_text += page_text + "\n"
     return pdf_text
 
-def get_tokens_from_text(text, model="o200k_base"):
+def get_tokens_from_text(text, encoding_name="o200k_base"):
     """
-    Encode text into tokens using tiktoken for the specified model.
+    Encode text into tokens using tiktoken.get_encoding for the specified encoding.
     Returns both the list of tokens and the encoder.
     """
-    encoder = tiktoken.encoding_for_model(model)
+    # Explicitly get the encoding using tiktoken.get_encoding
+    encoder = tiktoken.get_encoding(encoding_name)
     tokens = encoder.encode(text)
     return tokens, encoder
 
@@ -58,13 +59,13 @@ def extract_random_overlapping_chunks(tokens, chunk_size, num_chunks):
     return chunks
 
 def main():
-    # Use the "o200k_base" model for tokenization.
-    model = "o200k_base"
+    # Use the "o200k_base" encoding for tokenization.
+    encoding_name = "o200k_base"
     pdf_path = "sample.pdf"  # Replace with the path to your PDF file.
     
     # Extract text from the PDF and tokenize using o200k_base.
     pdf_text = extract_text_from_pdf(pdf_path)
-    tokens, encoder = get_tokens_from_text(pdf_text, model=model)
+    tokens, encoder = get_tokens_from_text(pdf_text, encoding_name=encoding_name)
     total_pdf_tokens = len(tokens)
     print(f"Total tokens in PDF: {total_pdf_tokens}\n")
     
