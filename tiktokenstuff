@@ -1,0 +1,101 @@
+import random
+import tiktoken
+import PyPDF2
+import pandas as pd
+
+def extract_text_from_pdf(pdf_path):
+    """
+    Extract text from all pages of a PDF file.
+    """
+    pdf_text = ""
+    with open(pdf_path, "rb") as file:
+        pdf_reader = PyPDF2.PdfReader(file)
+        for page in pdf_reader.pages:
+            page_text = page.extract_text()
+            if page_text:  # safeguard against pages with no text
+                pdf_text += page_text + "\n"
+    return pdf_text
+
+def get_tokens_from_text(text, model="gpt-4"):
+    """
+    Encode text into tokens using tiktoken for the specified model.
+    Returns both the list of tokens and the encoder.
+    """
+    encoder = tiktoken.encoding_for_model(model)
+    tokens = encoder.encode(text)
+    return tokens, encoder
+
+def extract_random_overlapping_chunks(tokens, chunk_size, num_chunks):
+    """
+    Extract a list of random overlapping token chunks from a list of tokens.
+    
+    Each chunk will be exactly `chunk_size` tokens. For each subsequent chunk,
+    a new starting index is randomly chosen from a range that ensures some overlap 
+    with the previous chunk. If the PDF tokens are insufficient to extract all chunks,
+    the function returns as many chunks as possible.
+    """
+    tokens_count = len(tokens)
+    chunks = []
+    if tokens_count < chunk_size:
+        return chunks
+    
+    # Choose an initial random start so the chunk fits within the token list.
+    current_start = random.randint(0, tokens_count - chunk_size)
+    for _ in range(num_chunks):
+        # Extract chunk of exact chunk_size tokens
+        chunk = tokens[current_start: current_start + chunk_size]
+        chunks.append(chunk)
+        
+        # Calculate the range for the next start index to force some overlap.
+        # We ensure that the next chunk also fits entirely.
+        lower_bound = current_start + 1
+        upper_bound = min(current_start + chunk_size - 1, tokens_count - chunk_size)
+        
+        if lower_bound >= upper_bound:
+            break  # Not enough room for further overlapping chunks.
+        
+        current_start = random.randint(lower_bound, upper_bound)
+    
+    return chunks
+
+def main():
+    model = "gpt-4"  # Use GPT-4 (or substitute with "gpt40 mini" if available)
+    pdf_path = "sample.pdf"  # Replace with the path to your PDF file.
+    
+    # Extract text from the PDF and get its tokens.
+    pdf_text = extract_text_from_pdf(pdf_path)
+    tokens, encoder = get_tokens_from_text(pdf_text, model=model)
+    total_pdf_tokens = len(tokens)
+    print(f"Total tokens in PDF: {total_pdf_tokens}\n")
+    
+    # Fixed token counts for user question and prompt.
+    fixed_user_tokens = 250    # e.g., ~200 words converted to tokens
+    fixed_prompt_tokens = 500
+    fixed_total = fixed_user_tokens + fixed_prompt_tokens  # 750 tokens fixed
+    
+    # Define dynamic chunk parameters.
+    chunk_sizes = [50, 100, 200, 300, 500]
+    num_chunks_list = list(range(5, 55, 5))  # 5, 10, 15, ... , 50
+    
+    # Build a table (DataFrame) to record TPM for each combination.
+    tpm_data = {}
+    for cs in chunk_sizes:
+        tpm_values = []
+        for num_chunks in num_chunks_list:
+            # Extract dynamic overlapping chunks from the PDF tokens.
+            chunks = extract_random_overlapping_chunks(tokens, cs, num_chunks)
+            # Calculate total tokens in the dynamic chunks.
+            dynamic_total = sum(len(chunk) for chunk in chunks)
+            # TPM = fixed tokens + dynamic tokens
+            tpm = fixed_total + dynamic_total
+            tpm_values.append(tpm)
+        tpm_data[f"{cs} tokens/chunk"] = tpm_values
+
+    df = pd.DataFrame(tpm_data, index=[f"{n} chunks" for n in num_chunks_list])
+    df.index.name = "Dynamic Chunk Count"
+    
+    print("Tokens per Minute (TPM) Table:")
+    print(df)
+
+if __name__ == "__main__":
+    main()
