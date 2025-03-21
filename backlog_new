@@ -1,0 +1,164 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# ================================
+# 1. Data Loading and Initial Setup
+# ================================
+# Load the dataset (update file path as needed)
+df = pd.read_csv("genesis_call_data.csv", parse_dates=['Day'])
+
+# Create time-based features: Day of week and ISO Week number
+df['Day_of_week'] = df['Day'].dt.day_name()
+df['Week_number'] = df['Day'].dt.isocalendar().week
+
+# Filter for weekdays (assuming operations are Monday to Friday)
+weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+df = df[df['Day_of_week'].isin(weekdays)]
+
+# ================================
+# 2. Reconstruct Total Time Metrics from Averages
+# ================================
+# Multiply average time metrics by their denominators to get total times.
+# (Note: Ensure denominators are non-zero to avoid division errors.)
+df['total_accept_time'] = df['avg_accept_time'] * df['Offered']
+df['total_handle_time'] = df['avg_handle_time'] * df['Accepted']
+df['total_wrap_time']   = df['avg_wrap_time']   * df['Accepted']
+df['total_hold_time']   = df['avh_hold_time']   * df['Offered']
+df['total_distribute_time'] = df['avg_distribute_time'] * df['Distributed']
+
+# ================================
+# 3. Weekly Aggregation: Raw Counts and Total Times
+# ================================
+# Define raw count columns (ensure these match the dataset's column names)
+raw_cols = ['Entered', 'Offered', 'Accepted', 'Distributed', 
+            'Short_Abandoned_waiting', 'Standard_abandoned_waiting', 'Abandoned_inviting']
+
+# Pivot raw counts by week using sum (to aggregate total calls)
+weekly_raw = df.pivot_table(index='Week_number', 
+                            columns='Day_of_week', 
+                            values=raw_cols, 
+                            aggfunc='sum')
+
+# Define total time columns
+time_total_cols = ['total_accept_time', 'total_handle_time', 
+                   'total_wrap_time', 'total_hold_time', 'total_distribute_time']
+
+# Pivot total times by week using sum
+weekly_time_totals = df.pivot_table(index='Week_number', 
+                                    columns='Day_of_week', 
+                                    values=time_total_cols, 
+                                    aggfunc='sum')
+
+# ================================
+# 4. Compute Weighted Average Time Metrics for Each Day
+# ================================
+# Compute weekly weighted averages for time metrics by dividing summed total times by summed denominators.
+
+# For avg_accept_time, denominator is Offered:
+weekly_avg_accept_time = weekly_time_totals['total_accept_time'] / weekly_raw['Offered']
+# For avg_handle_time, denominator is Accepted:
+weekly_avg_handle_time = weekly_time_totals['total_handle_time'] / weekly_raw['Accepted']
+# For avg_wrap_time, denominator is Accepted:
+weekly_avg_wrap_time = weekly_time_totals['total_wrap_time'] / weekly_raw['Accepted']
+# For avh_hold_time, denominator is Offered:
+weekly_avh_hold_time = weekly_time_totals['total_hold_time'] / weekly_raw['Offered']
+# For avg_distribute_time, denominator is Distributed:
+weekly_avg_distribute_time = weekly_time_totals['total_distribute_time'] / weekly_raw['Distributed']
+
+# ================================
+# 5. Compute Derived Rates on a Weekly Basis
+# ================================
+# Total abandoned calls are summed from all abandonment types.
+weekly_total_abandoned = (weekly_raw['Short_Abandoned_waiting'] + 
+                          weekly_raw['Standard_abandoned_waiting'] + 
+                          weekly_raw['Abandoned_inviting'])
+# Abandon rate = total abandoned / Entered
+weekly_abandon_rate = weekly_total_abandoned / weekly_raw['Entered']
+
+# Conversion rates:
+weekly_conversion_rate_offered = weekly_raw['Accepted'] / weekly_raw['Offered']
+weekly_conversion_rate_entered = weekly_raw['Accepted'] / weekly_raw['Entered']
+# Distribution efficiency = Accepted / Distributed
+weekly_distribution_efficiency = weekly_raw['Accepted'] / weekly_raw['Distributed']
+
+# ================================
+# 6. Aggregate Metrics for Monday and for Tuesday-Friday (Weighted)
+# ================================
+# --- Monday Aggregation ---
+monday_df = pd.DataFrame({
+    'Entered': weekly_raw['Entered']['Monday'],
+    'Offered': weekly_raw['Offered']['Monday'],
+    'Accepted': weekly_raw['Accepted']['Monday'],
+    'Distributed': weekly_raw['Distributed']['Monday'],
+    'avg_accept_time': weekly_avg_accept_time['Monday'],
+    'avg_handle_time': weekly_avg_handle_time['Monday'],
+    'avg_wrap_time': weekly_avg_wrap_time['Monday'],
+    'avh_hold_time': weekly_avh_hold_time['Monday'],
+    'avg_distribute_time': weekly_avg_distribute_time['Monday'],
+    'abandon_rate': weekly_abandon_rate['Monday'],
+    'conversion_rate_offered': weekly_conversion_rate_offered['Monday'],
+    'conversion_rate_entered': weekly_conversion_rate_entered['Monday'],
+    'distribution_efficiency': weekly_distribution_efficiency['Monday']
+})
+
+print("Aggregated Monday Metrics:")
+print(monday_df.head())
+
+# --- Tuesday-Friday Aggregation (Weighted Average) ---
+days_tf = ['Tuesday', 'Wednesday', 'Thursday', 'Friday']
+
+# For time metrics, compute the weighted average using sums over Tuesday-Friday
+tuefri_avg_accept_time = weekly_time_totals['total_accept_time'][days_tf].sum(axis=1) / \
+                          weekly_raw['Offered'][days_tf].sum(axis=1)
+tuefri_avg_handle_time = weekly_time_totals['total_handle_time'][days_tf].sum(axis=1) / \
+                          weekly_raw['Accepted'][days_tf].sum(axis=1)
+tuefri_avg_wrap_time = weekly_time_totals['total_wrap_time'][days_tf].sum(axis=1) / \
+                        weekly_raw['Accepted'][days_tf].sum(axis=1)
+tuefri_avh_hold_time = weekly_time_totals['total_hold_time'][days_tf].sum(axis=1) / \
+                        weekly_raw['Offered'][days_tf].sum(axis=1)
+tuefri_avg_distribute_time = weekly_time_totals['total_distribute_time'][days_tf].sum(axis=1) / \
+                             weekly_raw['Distributed'][days_tf].sum(axis=1)
+
+# For counts, summing over Tuesday-Friday is often more appropriate for total volume metrics.
+tuefri_entered = weekly_raw['Entered'][days_tf].sum(axis=1)
+tuefri_offered = weekly_raw['Offered'][days_tf].sum(axis=1)
+tuefri_accepted = weekly_raw['Accepted'][days_tf].sum(axis=1)
+tuefri_distributed = weekly_raw['Distributed'][days_tf].sum(axis=1)
+
+# For derived rates, recompute from the summed numerators/denominators:
+tuefri_total_abandoned = (weekly_raw['Short_Abandoned_waiting'][days_tf].sum(axis=1) +
+                          weekly_raw['Standard_abandoned_waiting'][days_tf].sum(axis=1) +
+                          weekly_raw['Abandoned_inviting'][days_tf].sum(axis=1))
+tuefri_abandon_rate = tuefri_total_abandoned / weekly_raw['Entered'][days_tf].sum(axis=1)
+tuefri_conversion_rate_offered = weekly_raw['Accepted'][days_tf].sum(axis=1) / \
+                                 weekly_raw['Offered'][days_tf].sum(axis=1)
+tuefri_conversion_rate_entered = weekly_raw['Accepted'][days_tf].sum(axis=1) / \
+                                 weekly_raw['Entered'][days_tf].sum(axis=1)
+tuefri_distribution_efficiency = weekly_raw['Accepted'][days_tf].sum(axis=1) / \
+                                 weekly_raw['Distributed'][days_tf].sum(axis=1)
+
+tuefri_df = pd.DataFrame({
+    'Entered': tuefri_entered,
+    'Offered': tuefri_offered,
+    'Accepted': tuefri_accepted,
+    'Distributed': tuefri_distributed,
+    'avg_accept_time': tuefri_avg_accept_time,
+    'avg_handle_time': tuefri_avg_handle_time,
+    'avg_wrap_time': tuefri_avg_wrap_time,
+    'avh_hold_time': tuefri_avh_hold_time,
+    'avg_distribute_time': tuefri_avg_distribute_time,
+    'abandon_rate': tuefri_abandon_rate,
+    'conversion_rate_offered': tuefri_conversion_rate_offered,
+    'conversion_rate_entered': tuefri_conversion_rate_entered,
+    'distribution_efficiency': tuefri_distribution_efficiency
+})
+
+print("\nAggregated Tuesday-Friday Metrics (Weighted Averages):")
+print(tuefri_df.head())
+
+# ================================
+# 7. Next Steps for Analysis
+# ================================
+# With these correctly aggregated metrics, you can now proceed to compare Monday vs. Tue-Fri performance,
+# run regression models, perform feature importance analysis, and more.
