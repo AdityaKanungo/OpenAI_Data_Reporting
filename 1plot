@@ -1,0 +1,34 @@
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Selected pairs to plot
+selected_pairs = [
+    ('monday_volume', 'other_volume_avg'),
+    ('monday_ansrate', 'other_ansrate'),
+    ('monday_avg_accept_time', 'other_avg_accept_time'),
+    ('monday_avg_hold_time', 'other_avg_hold_time'),
+    ('monday_avg_handle_time', 'other_avg_handle_time'),
+    ('monday_non_offered', 'other_non_offered_avg')
+]
+
+# Set overall plot style
+sns.set(style="whitegrid")
+
+# Create subplots
+fig, axes = plt.subplots(nrows=2, ncols=3, figsize=(18, 10))
+fig.suptitle("Scatter Plots Comparing Monday Metrics with Others", fontsize=16)
+
+# Flatten axes array for easy indexing
+axes = axes.flatten()
+
+# Plot each pair
+for idx, (x, y) in enumerate(selected_pairs):
+    ax = axes[idx]
+    sns.scatterplot(x=weekly_df[x], y=weekly_df[y], alpha=0.6, ax=ax)
+    ax.set_xlabel(x.replace("_", " ").title())
+    ax.set_ylabel(y.replace("_", " ").title())
+    ax.set_title(f"{x} vs {y}")
+
+# Adjust layout
+plt.tight_layout(rect=[0, 0, 1, 0.96])
+plt.show()
