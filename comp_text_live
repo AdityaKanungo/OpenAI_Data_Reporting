@@ -1,0 +1,59 @@
+import streamlit as st
+from streamlit.components.v1 import html
+
+class LiveTextCounter:
+    """A Streamlit component encapsulating the exact live character counter functionality and returning live count."""
+
+    def __init__(self, char_limit: int = 200, height: int = 500):
+        self.char_limit = char_limit
+        self.height = height
+
+    def _build_html(self) -> str:
+        return f"""
+    <style>
+        .text-container {{ display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }}
+        #text_area {{ width: 95%; height: 120px; padding: 10px; font-size: 16px; font-family: 'Inter', sans-serif; border: 2px solid #ccc; border-radius: 8px; outline: none; transition: border-color 0.3s ease-in-out; box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1); }}
+        #text_area:focus {{ border-color: #FF4B4B; box-shadow: 0 2px 8px rgba(76, 175, 80, 0.4); }}
+        #char_count {{ margin-top: 8px; font-size: 18px; font-weight: bold; color: #FF4B4B; font-family: 'Inter', sans-serif; }}
+        #char_limit_warning {{ background-color: #fff8d4; color: #8a6d3b; border: 1px solid #ffeeba; padding: 10px; margin-top: 10px; border-radius: 4px; max-width: 400px; font-family: 'Inter', sans-serif; display: none; }}
+        #submit_button {{ margin-top: 15px; padding: 10px 20px; font-size: 16px; font-family: 'Inter', sans-serif; border: none; border-radius: 5px; background-color: #4CAF50; color: white; cursor: pointer; }}
+        #submit_button:hover {{ background-color: #45a049; }}
+    </style>
+
+    <div class="text-container">
+        <textarea id="text_area" placeholder="Type here..."></textarea>
+        <p id="char_count">Character count: 0</p>
+        <p id="char_limit_warning"></p>
+        <button id="submit_button">Submit</button>
+    </div>
+
+    <script>
+        const textArea = document.getElementById("text_area");
+        const charCountEl = document.getElementById("char_count");
+        const warningEl = document.getElementById("char_limit_warning");
+        const submitButton = document.getElementById("submit_button");
+        const charLimit = {self.char_limit};
+
+        function setWarningStyle() {{ warningEl.style.backgroundColor = "#fff8d4"; warningEl.style.color = "#8a6d3b"; warningEl.style.borderColor = "#ffeeba"; }}
+        function setErrorStyle() {{ warningEl.style.backgroundColor = "#ffcccb"; warningEl.style.color = "#a94442"; warningEl.style.borderColor = "#ebccd1"; }}
+        function updatePython(count) {{
+            window.parent.postMessage({{ isStreamlitMessage: true, type: 'streamlit:setComponentValue', value: count }}, '*');
+        }}
+
+        textArea.addEventListener("input", () => {{
+            const count = textArea.value.length;
+            charCountEl.innerText = `Character count: ${{count}}`;
+            updatePython(count);
+            if (count > charLimit) {{ setWarningStyle(); warningEl.style.display = 'block'; warningEl.innerText = `Your question is currently ${{count}} characters. This is over the ${{charLimit}} character limit. Please reduce the length before submitting.`; }} else {{ warningEl.style.display = 'none'; }}
+        }});
+
+        submitButton.addEventListener("click", () => {{
+            const count = textArea.value.length;
+            if (count > charLimit) {{ setErrorStyle(); warningEl.style.display = 'block'; warningEl.innerText = `Your question is currently ${{count}} characters. This is over the ${{charLimit}} character limit and cannot be submitted. Please reduce the word count before submit.`; }} else {{ warningEl.style.display = 'none'; alert('Submitted successfully!'); }}
+        }});
+    </script>
+        """
+
+    def render(self) -> int:
+        """Renders component and returns live character count."""
+        return html(self._build_html(), height=self.height)
